@@ -7,3 +7,4 @@ dist/
 server/.local-data/
 client/test-results/
 client/playwright-report/
+agentprompt.md
