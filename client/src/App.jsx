@@ -1,0 +1,91 @@
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { ConfigProvider } from 'antd';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
+
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import Profile from './pages/Profile';
+import ResidentDashboard from './pages/ResidentDashboard';
+import SubmitTicket from './pages/SubmitTicket';
+import MyTickets from './pages/MyTickets';
+import AdminDashboard from './pages/AdminDashboard';
+import TicketDetails from './pages/TicketDetails';
+import UserManagement from './pages/UserManagement';
+import ArchiveView from './pages/ArchiveView';
+
+const theme = {
+  token: {
+    colorPrimary: '#0A4D68',
+    colorSuccess: '#52C41A',
+    colorWarning: '#FAAD14',
+    colorError: '#FF4D4F',
+    colorInfo: '#1890FF',
+    colorBgLayout: '#F0F2F5',
+    borderRadius: 6,
+    fontFamily:
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  },
+  components: {
+    Layout: {
+      siderBg: '#0A4D68',
+      headerBg: '#ffffff',
+    },
+    Menu: {
+      darkItemBg: '#0A4D68',
+      darkItemSelectedBg: '#2D6A4F',
+      darkItemHoverBg: '#0d6080',
+      darkItemColor: 'rgba(255,255,255,0.85)',
+      darkItemSelectedColor: '#D4A017',
+    },
+    Button: {
+      primaryShadow: '0 2px 0 rgba(10, 77, 104, 0.1)',
+    },
+  },
+};
+
+function App() {
+  return (
+    <ConfigProvider theme={theme}>
+      <AuthProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+
+          {/* Protected: any authenticated user */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/profile" element={<Profile />} />
+          </Route>
+
+          {/* Protected: resident role */}
+          <Route element={<ProtectedRoute allowedRoles={['resident']} />}>
+            <Route path="/resident/dashboard" element={<ResidentDashboard />} />
+            <Route path="/resident/submit-ticket" element={<SubmitTicket />} />
+            <Route path="/resident/my-tickets" element={<MyTickets />} />
+            <Route path="/resident/ticket/:id" element={<TicketDetails />} />
+          </Route>
+
+          {/* Protected: admin role */}
+          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/ticket/:id" element={<TicketDetails />} />
+            <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/admin/archive" element={<ArchiveView />} />
+          </Route>
+
+          {/* Catch all */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvider>
+    </ConfigProvider>
+  );
+}
+
+export default App;
