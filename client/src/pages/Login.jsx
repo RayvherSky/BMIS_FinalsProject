@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { Card, Form, Input, Button, Typography } from 'antd';
-import { MailOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { Form, Input, Button } from 'antd';
+import { MailOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
-
-const { Text } = Typography;
+import barangayLogo from '../assets/Barangay_Logo.png';
+import cityHallPhoto from '../assets/Login_Screen_DefPhoto.jpeg';
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -28,73 +28,89 @@ const Login = () => {
   };
 
   return (
-    <div className="auth-container">
-      <Card className="auth-card">
-        <div className="auth-header">
-          <div className="gov-seal">
-            <SafetyCertificateOutlined />
-          </div>
+    <main className="login-page">
+      <section className="login-left-panel" aria-label="Barangay Baclaran, Parañaque City">
+        <img className="login-photo" src={cityHallPhoto} alt="Parañaque City Hall" />
+        <div className="login-vignette" aria-hidden="true" />
+        <p className="login-location">Parañaque City <span aria-hidden="true">/</span> Metro Manila</p>
+        <div className="login-logo-overlay">
+          <img src={barangayLogo} alt="Barangay Baclaran seal" width="176" height="176" />
           <h2>Barangay Baclaran</h2>
-          <p>Incident & Hazard Reporting System</p>
+          <p>Parañaque City</p>
         </div>
+        <div className="login-community-copy">
+          <span className="login-gold-rule" aria-hidden="true" />
+          <p>A better barangay,<br />together.</p>
+          <span>Report a concern. Follow its progress.</span>
+        </div>
+      </section>
 
-        <Form
-          name="login"
-          onFinish={onFinish}
-          layout="vertical"
-          size="large"
-          autoComplete="off"
-        >
-          <Form.Item
-            name="email"
-            rules={[
-              { required: true, message: 'Please enter your email' },
-              { type: 'email', message: 'Please enter a valid email' },
-            ]}
-          >
-            <Input
-              prefix={<MailOutlined style={{ color: '#0A4D68' }} />}
-              placeholder="Email Address"
-            />
-          </Form.Item>
+      <div className="login-right-wrapper">
+        <section className="login-right-panel" aria-labelledby="login-heading">
+          <div className="login-right-inner">
+            <div className="login-mobile-brand">
+              <img src={barangayLogo} alt="" width="56" height="56" />
+              <div><strong>Barangay Baclaran</strong><span>Parañaque City</span></div>
+            </div>
+            <header className="login-form-header">
+              <p className="login-eyebrow">Incident &amp; Hazard Reporting System</p>
+              <h1 id="login-heading">Welcome Back</h1>
+              <p className="login-subtitle">Sign in to your account</p>
+            </header>
 
-          <Form.Item
-            name="password"
-            rules={[{ required: true, message: 'Please enter your password' }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined style={{ color: '#0A4D68' }} />}
-              placeholder="Password"
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              block
-              style={{ height: 44, fontWeight: 600 }}
+            <Form
+              name="login"
+              onFinish={onFinish}
+              layout="vertical"
+              size="large"
+              requiredMark={false}
             >
-              Login
-            </Button>
-          </Form.Item>
-        </Form>
+              <Form.Item
+                name="email"
+                label="Email Address"
+                rules={[
+                  { required: true, message: 'Please enter your email' },
+                  { type: 'email', message: 'Please enter a valid email' },
+                ]}
+              >
+                <Input
+                  prefix={<MailOutlined aria-hidden="true" />}
+                  placeholder="Email Address"
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </Form.Item>
 
-        <div style={{ textAlign: 'center' }}>
-          <Text>
-            Don&apos;t have an account?{' '}
-            <Link to="/register" style={{ fontWeight: 600 }}>
-              Register
-            </Link>
-          </Text>
-          <br />
-          <Link to="/forgot-password" style={{ fontSize: 13 }}>
-            Forgot Password?
-          </Link>
-        </div>
-      </Card>
-    </div>
+              <Form.Item
+                name="password"
+                label="Password"
+                rules={[{ required: true, message: 'Please enter your password' }]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined aria-hidden="true" />}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                />
+              </Form.Item>
+
+              <Form.Item className="login-submit">
+                <Button type="primary" htmlType="submit" loading={loading} block>
+                  Login
+                </Button>
+              </Form.Item>
+            </Form>
+
+            <div className="login-links">
+              <p>Don&apos;t have an account? <Link to="/register">Register</Link></p>
+              <Link to="/forgot-password">Forgot Password?</Link>
+            </div>
+            <p className="login-service-note">For non-emergency community concerns.</p>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 };
 

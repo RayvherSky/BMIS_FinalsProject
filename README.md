@@ -59,18 +59,18 @@ Open [BMIS at localhost:3000](http://localhost:3000). The frontend proxies API c
 
 All seeded accounts use **`Password123!`**.
 
-| Role | Email |
-| --- | --- |
-| Admin | `maria.santos@email.com` |
-| Admin | `juan.delacruz@email.com` |
-| Resident | `ana.reyes@email.com` |
-| Resident | `pedro.garcia@email.com` |
-| Resident | `rosa.martinez@email.com` |
-| Resident | `carlos.bautista@email.com` |
+| Role     | Email                        |
+| -------- | ---------------------------- |
+| Admin    | `maria.santos@email.com`     |
+| Admin    | `juan.delacruz@email.com`    |
+| Resident | `ana.reyes@email.com`        |
+| Resident | `pedro.garcia@email.com`     |
+| Resident | `rosa.martinez@email.com`    |
+| Resident | `carlos.bautista@email.com`  |
 | Resident | `elena.villanueva@email.com` |
-| Resident | `roberto.aquino@email.com` |
-| Resident | `lorna.fernandez@email.com` |
-| Resident | `miguel.torres@email.com` |
+| Resident | `roberto.aquino@email.com`   |
+| Resident | `lorna.fernandez@email.com`  |
+| Resident | `miguel.torres@email.com`    |
 
 ## Demonstration workflow
 

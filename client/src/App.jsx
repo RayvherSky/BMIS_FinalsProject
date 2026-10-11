@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
+import SplashScreen from './components/SplashScreen/SplashScreen';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -48,41 +49,52 @@ const theme = {
 };
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const finishSplash = useCallback(() => setShowSplash(false), []);
+
   return (
     <ConfigProvider theme={theme}>
       <AuthProvider>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-
-          {/* Protected: any authenticated user */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/profile" element={<Profile />} />
-          </Route>
-
-          {/* Protected: resident role */}
-          <Route element={<ProtectedRoute allowedRoles={['resident']} />}>
-            <Route path="/resident/dashboard" element={<ResidentDashboard />} />
-            <Route path="/resident/submit-ticket" element={<SubmitTicket />} />
-            <Route path="/resident/my-tickets" element={<MyTickets />} />
-            <Route path="/resident/ticket/:id" element={<TicketDetails />} />
-          </Route>
-
-          {/* Protected: admin role */}
-          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/ticket/:id" element={<TicketDetails />} />
-            <Route path="/admin/users" element={<UserManagement />} />
-            <Route path="/admin/archive" element={<ArchiveView />} />
-          </Route>
-
-          {/* Catch all */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+        {showSplash && <SplashScreen onComplete={finishSplash} />}
+        <div
+          className={`app-content${showSplash ? ' app-content--loading' : ''}`}
+          inert={showSplash ? '' : undefined}
+          aria-disabled={showSplash ? true : undefined}
+          aria-hidden={showSplash ? true : undefined}
+        >
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
+  
+            {/* Protected: any authenticated user */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+  
+            {/* Protected: resident role */}
+            <Route element={<ProtectedRoute allowedRoles={['resident']} />}>
+              <Route path="/resident/dashboard" element={<ResidentDashboard />} />
+              <Route path="/resident/submit-ticket" element={<SubmitTicket />} />
+              <Route path="/resident/my-tickets" element={<MyTickets />} />
+              <Route path="/resident/ticket/:id" element={<TicketDetails />} />
+            </Route>
+  
+            {/* Protected: admin role */}
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/ticket/:id" element={<TicketDetails />} />
+              <Route path="/admin/users" element={<UserManagement />} />
+              <Route path="/admin/archive" element={<ArchiveView />} />
+            </Route>
+  
+            {/* Catch all */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </div>
       </AuthProvider>
     </ConfigProvider>
   );
