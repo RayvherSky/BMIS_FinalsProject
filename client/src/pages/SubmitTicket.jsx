@@ -10,6 +10,7 @@ const SubmitTicket = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [fileList, setFileList] = useState([]);
+  const [isCustomCategory, setIsCustomCategory] = useState(false); // Tracks if "Others" is selected
 
   const validatePhoto = (file) => {
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -27,7 +28,12 @@ const SubmitTicket = () => {
     setLoading(true);
     try {
       const data = new FormData();
-      for (const [key, value] of Object.entries(values)) data.append(key, value);
+      
+      // Append all fields from the form directly (category + customCategory)
+      for (const [key, value] of Object.entries(values)) {
+        if (value) data.append(key, value);
+      }
+      
       if (fileList.length) data.append('image', fileList[0].originFileObj || fileList[0]);
       await createTicket(data);
       message.success('Incident reported successfully');
@@ -39,6 +45,12 @@ const SubmitTicket = () => {
     }
   };
 
+  // Add "Others" to the bottom of the existing categories
+  const categoryOptions = [
+    ...CATEGORIES.map((value) => ({ value, label: value })),
+    { value: 'Others', label: 'Others (Please specify)' }
+  ];
+
   return (
     <AppLayout>
       <h1 className="page-title">Report an Incident</h1>
@@ -47,7 +59,28 @@ const SubmitTicket = () => {
           <Form layout="vertical" onFinish={submit} initialValues={{ priority: 'Medium' }} disabled={loading}>
             <Form.Item name="title" label="Title" rules={[{ required: true, whitespace: true, message: 'Please enter a title' }]}><Input placeholder="Briefly describe the issue" /></Form.Item>
             <Form.Item name="description" label="Description" rules={[{ required: true, whitespace: true, message: 'Please describe the incident' }]}><Input.TextArea rows={4} placeholder="Describe what happened and how residents are affected" /></Form.Item>
-            <Form.Item name="category" label="Category" rules={[{ required: true, message: 'Please select a category' }]}><Select aria-label="Category" placeholder="Select a category" options={CATEGORIES.map((value) => ({ value, label: value }))} virtual={false} /></Form.Item>
+            
+            <Form.Item name="category" label="Category" rules={[{ required: true, message: 'Please select a category' }]}>
+              <Select 
+                aria-label="Category" 
+                placeholder="Select a category" 
+                options={categoryOptions} 
+                virtual={false} 
+                onChange={(value) => setIsCustomCategory(value === 'Others')}
+              />
+            </Form.Item>
+
+            {/* Conditionally render the custom input if 'Others' is selected */}
+            {isCustomCategory && (
+              <Form.Item 
+                name="customCategory" 
+                label="Specify Category" 
+                rules={[{ required: true, whitespace: true, message: 'Please specify your custom category' }]}
+              >
+                <Input placeholder="Enter custom category name" />
+              </Form.Item>
+            )}
+
             <Form.Item name="location" label="Location" rules={[{ required: true, whitespace: true, message: 'Please enter the location' }]}><Input placeholder="e.g., Quirino Ave. cor. Redemptorist Rd." /></Form.Item>
             <Form.Item name="priority" label="Priority" rules={[{ required: true }]}><Select aria-label="Priority" options={PRIORITIES.map((value) => ({ value, label: value }))} /></Form.Item>
             <Form.Item label="Evidence Photo" extra="Optional. One JPEG, PNG, or WebP photo, up to 5 MB.">

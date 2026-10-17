@@ -5,7 +5,9 @@ const Ticket = require("../models/Ticket");
 // @access  Private (Resident)
 const createTicket = async (req, res) => {
   try {
-    const { title, description, category, priority, location } = req.body;
+    // ADDED customCategory to destructured body
+    const { title, description, category, customCategory, priority, location } =
+      req.body;
 
     if (!title || !description || !category || !location) {
       return res
@@ -19,6 +21,8 @@ const createTicket = async (req, res) => {
       title,
       description,
       category,
+      // Only store custom category string if 'Others' is selected
+      customCategory: category === "Others" ? customCategory : "",
       priority: priority || "Medium",
       location,
       submittedBy: req.user.id,
@@ -210,7 +214,6 @@ const updateTicketStatus = async (req, res) => {
   }
 };
 
-// ADDED NEW FEATURE CONTROLLER
 // @desc    Update ticket priority (admin)
 // @route   PATCH /api/tickets/:id/priority
 // @access  Private (Admin)
@@ -224,7 +227,7 @@ const updateTicketPriority = async (req, res) => {
         .json({ message: "Please provide a priority level" });
     }
 
-    const validPriorities = ["Low", "Medium", "High", "Critical"];
+    const validPriorities = ["Low", "Medium", "High", "Urgent"]; // Matches your schema
     if (!validPriorities.includes(priority)) {
       return res
         .status(400)
@@ -299,13 +302,39 @@ const linkTicket = async (req, res) => {
   }
 };
 
-// ADDED: updateTicketPriority to the exports
+// @desc    Unlink a ticket (admin)
+// @route   PUT /api/tickets/:id/unlink
+// @access  Private (Admin)
+const unlinkTicket = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    ticket.linkedTicket = null;
+    await ticket.save();
+
+    const updatedTicket = await Ticket.findById(ticket._id)
+      .populate("submittedBy", "firstName lastName email")
+      .populate("linkedTicket");
+
+    res.status(200).json(updatedTicket);
+  } catch (error) {
+    if (error.kind === "ObjectId") {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 module.exports = {
   createTicket,
   getAllTickets,
   getMyTickets,
   getTicketById,
   updateTicketStatus,
-  updateTicketPriority, // Exported here
+  updateTicketPriority,
   linkTicket,
+  unlinkTicket,
 };

@@ -40,3 +40,8 @@ export const updateTicketPriority = async (id, priority) => {
   });
   return response.data;
 };
+
+export const unlinkTicket = async (id) => {
+  const response = await api.put(`/api/tickets/${id}/unlink`);
+  return response.data;
+};

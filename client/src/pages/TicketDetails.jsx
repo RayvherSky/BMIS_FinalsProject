@@ -5,7 +5,8 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import AppLayout from '../components/Layout/AppLayout';
 import StatusBadge from '../components/StatusBadge/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import { getAllTickets, getTicketById, linkTicket, updateTicketStatus, updateTicketPriority } from '../api/ticketApi';
+// ADDED: unlinkTicket to the imports
+import { getAllTickets, getTicketById, linkTicket, unlinkTicket, updateTicketStatus, updateTicketPriority } from '../api/ticketApi';
 import { archiveTicket } from '../api/archiveApi';
 import { formatDate, getPriorityColor, PRIORITIES } from '../utils/helpers';
 
@@ -85,10 +86,7 @@ const TicketDetails = () => {
           setTicket(updated);
           message.success(`Ticket marked ${status}`);
         } catch (err) {
-          if (currentView.current === view) {
-            message.error(err.response?.data?.message || 'Unable to update ticket status');
-            throw err;
-          }
+          if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to update ticket status');
         } finally {
           if (currentView.current === view) setWorking(false);
         }
@@ -113,10 +111,7 @@ const TicketDetails = () => {
           setTicket(updated);
           message.success(`Ticket priority changed to ${newPriority}`);
         } catch (err) {
-          if (currentView.current === view) {
-            message.error(err.response?.data?.message || 'Unable to update ticket priority');
-            throw err;
-          }
+          if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to update ticket priority');
         } finally {
           if (currentView.current === view) setWorking(false);
         }
@@ -139,10 +134,7 @@ const TicketDetails = () => {
           message.success('Ticket archived');
           navigate('/admin/dashboard');
         } catch (err) {
-          if (currentView.current === view) {
-            message.error(err.response?.data?.message || 'Unable to archive ticket');
-            throw err;
-          }
+          if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to archive ticket');
         } finally {
           if (currentView.current === view) setWorking(false);
         }
@@ -154,7 +146,6 @@ const TicketDetails = () => {
     if (currentView.current !== view || selectedDuplicates.length === 0) return;
     setWorking(true);
     try {
-      // FIX: We update the SELECTED tickets to point to THIS master ticket.
       await Promise.all(selectedDuplicates.map(targetId => linkTicket(targetId, id)));
       
       if (currentView.current !== view) return;
@@ -173,7 +164,39 @@ const TicketDetails = () => {
     }
   };
 
-  // Find all tickets from the database that are currently linked to THIS ticket
+  // FEATURE 3: Handle Unlinking
+  const handleUnlink = (targetIdToUnlink) => {
+    confirmation.current = Modal.confirm({
+      title: 'Unlink this ticket?',
+      content: 'This will remove the duplicate relationship between these tickets.',
+      okText: 'Unlink',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        if (currentView.current !== view) return;
+        setWorking(true);
+        try {
+          // Send request to clear the linkedTicket field
+          await unlinkTicket(targetIdToUnlink);
+          
+          if (currentView.current !== view) return;
+          message.success('Ticket unlinked successfully');
+          
+          // Reload the page data
+          const updated = await getTicketById(id);
+          setTicket(updated);
+          
+          const data = await getAllTickets();
+          setOtherTickets(data.filter((item) => item._id !== id));
+        } catch (err) {
+          if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to unlink ticket');
+        } finally {
+          if (currentView.current === view) setWorking(false);
+        }
+      },
+    });
+  };
+
   const linkedToThis = otherTickets.filter(t => {
     if (!t.linkedTicket) return false;
     const linkedId = typeof t.linkedTicket === 'object' ? t.linkedTicket._id : t.linkedTicket;
@@ -210,7 +233,14 @@ const TicketDetails = () => {
     ...(ticket.linkedTicket ? [{ 
       key: 'linked_master', 
       label: 'Duplicate Of', 
-      children: <Link to={`${base}/ticket/${ticket.linkedTicket._id}`}>{ticket.linkedTicket.title || 'View master ticket'}</Link>, 
+      children: (
+        <Space>
+          <Link to={`${base}/ticket/${ticket.linkedTicket._id}`}>{ticket.linkedTicket.title || 'View master ticket'}</Link>
+          {isAdmin && !ticket.isArchived && (
+            <Button type="text" danger size="small" onClick={() => handleUnlink(ticket._id)}>Unlink</Button>
+          )}
+        </Space>
+      ), 
       span: 2 
     }] : []),
     
@@ -221,9 +251,12 @@ const TicketDetails = () => {
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {linkedToThis.map(dup => (
-            <div key={dup._id}>
+            <div key={dup._id} style={{ display: 'flex', alignItems: 'center' }}>
               <Link to={`${base}/ticket/${dup._id}`}>• {dup.title}</Link>
               <Tag style={{ marginLeft: 8, fontSize: '10px' }}>{dup.status}</Tag>
+              {isAdmin && !ticket.isArchived && (
+                <Button type="text" danger size="small" style={{ padding: '0 4px', height: 'auto', fontSize: '12px' }} onClick={() => handleUnlink(dup._id)}>Unlink</Button>
+              )}
             </div>
           ))}
         </div>
@@ -234,7 +267,6 @@ const TicketDetails = () => {
   
   const imageUrl = ticket?.image ? (ticket.image.startsWith('/uploads/') ? ticket.image : `/uploads/${ticket.image}`) : '';
 
-  // Only show tickets in the dropdown that are in the same category AND are not already linked to a master
   const duplicateOptions = ticket ? otherTickets
     .filter((item) => item.category === ticket.category && !item.linkedTicket)
     .map((item) => ({ value: item._id, label: `${item.title} (${item.status})` })) 
