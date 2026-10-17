@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Button, Card, Descriptions, Image, Modal, Result, Select, Space, Spin, Tag, Typography, message } from 'antd';
+// ADDED: Checkbox to Ant Design imports
+import { Button, Card, Descriptions, Image, Modal, Result, Select, Space, Spin, Tag, Typography, message, List, Divider, Input, Checkbox } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import AppLayout from '../components/Layout/AppLayout';
 import StatusBadge from '../components/StatusBadge/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-// ADDED: unlinkTicket to the imports
-import { getAllTickets, getTicketById, linkTicket, unlinkTicket, updateTicketStatus, updateTicketPriority } from '../api/ticketApi';
+import { getAllTickets, getTicketById, linkTicket, unlinkTicket, updateTicketStatus, updateTicketPriority, addTicketNote } from '../api/ticketApi';
 import { archiveTicket } from '../api/archiveApi';
 import { formatDate, getPriorityColor, PRIORITIES } from '../utils/helpers';
 
@@ -25,6 +25,10 @@ const TicketDetails = () => {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   
+  const [noteText, setNoteText] = useState('');
+  const [isPrivateNote, setIsPrivateNote] = useState(false); // ADDED: state for checkbox
+  const [submittingNote, setSubmittingNote] = useState(false);
+  
   const view = useMemo(() => ({ id }), [id, isAdmin]);
   const currentView = useRef(view);
   const confirmation = useRef(null);
@@ -39,6 +43,8 @@ const TicketDetails = () => {
     setError('');
     setOtherTickets([]);
     setSelectedDuplicates([]); 
+    setNoteText('');
+    setIsPrivateNote(false);
     
     const loadTicket = async () => {
       try {
@@ -147,7 +153,6 @@ const TicketDetails = () => {
     setWorking(true);
     try {
       await Promise.all(selectedDuplicates.map(targetId => linkTicket(targetId, id)));
-      
       if (currentView.current !== view) return;
       message.success('Duplicate tickets linked successfully');
       
@@ -164,7 +169,6 @@ const TicketDetails = () => {
     }
   };
 
-  // FEATURE 3: Handle Unlinking
   const handleUnlink = (targetIdToUnlink) => {
     confirmation.current = Modal.confirm({
       title: 'Unlink this ticket?',
@@ -176,16 +180,11 @@ const TicketDetails = () => {
         if (currentView.current !== view) return;
         setWorking(true);
         try {
-          // Send request to clear the linkedTicket field
           await unlinkTicket(targetIdToUnlink);
-          
           if (currentView.current !== view) return;
           message.success('Ticket unlinked successfully');
-          
-          // Reload the page data
           const updated = await getTicketById(id);
           setTicket(updated);
-          
           const data = await getAllTickets();
           setOtherTickets(data.filter((item) => item._id !== id));
         } catch (err) {
@@ -197,6 +196,24 @@ const TicketDetails = () => {
     });
   };
 
+  const handleAddNote = async () => {
+    if (!noteText.trim() || currentView.current !== view) return;
+    setSubmittingNote(true);
+    try {
+      // Pass the isPrivateNote status to the API
+      const updated = await addTicketNote(id, noteText, isPrivateNote);
+      if (currentView.current !== view) return;
+      setTicket(updated);
+      setNoteText('');
+      setIsPrivateNote(false); // reset toggle
+      message.success(isPrivateNote ? 'Private internal note saved' : 'Update added successfully');
+    } catch (err) {
+      if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to add note');
+    } finally {
+      if (currentView.current === view) setSubmittingNote(false);
+    }
+  };
+
   const linkedToThis = otherTickets.filter(t => {
     if (!t.linkedTicket) return false;
     const linkedId = typeof t.linkedTicket === 'object' ? t.linkedTicket._id : t.linkedTicket;
@@ -206,7 +223,7 @@ const TicketDetails = () => {
   const items = ticket ? [
     { key: 'title', label: 'Title', children: ticket.title, span: 2 },
     { key: 'description', label: 'Description', children: <span style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</span>, span: 2 },
-    { key: 'category', label: 'Category', children: ticket.category },
+    { key: 'category', label: 'Category', children: ticket.category === 'Others' && ticket.customCategory ? `Others (${ticket.customCategory})` : ticket.category },
     { key: 'status', label: 'Status', children: <Space wrap><StatusBadge status={ticket.status} />{ticket.isArchived && <Tag>Archived</Tag>}</Space> },
     { 
       key: 'priority', 
@@ -228,8 +245,6 @@ const TicketDetails = () => {
     { key: 'created', label: 'Date Submitted', children: formatDate(ticket.createdAt), span: 2 },
     ...(ticket.resolvedAt ? [{ key: 'resolved', label: 'Resolved At', children: formatDate(ticket.resolvedAt), span: 2 }] : []),
     ...(ticket.dismissedAt ? [{ key: 'dismissed', label: 'Dismissed At', children: formatDate(ticket.dismissedAt), span: 2 }] : []),
-    
-    // IF THIS TICKET POINTS TO A MASTER (Duplicate)
     ...(ticket.linkedTicket ? [{ 
       key: 'linked_master', 
       label: 'Duplicate Of', 
@@ -243,8 +258,6 @@ const TicketDetails = () => {
       ), 
       span: 2 
     }] : []),
-    
-    // IF THIS TICKET HAS MULTIPLE DUPLICATES POINTING TO IT (Master)
     ...(linkedToThis.length > 0 ? [{ 
       key: 'linked_list', 
       label: 'Linked Tickets', 
@@ -281,8 +294,63 @@ const TicketDetails = () => {
             <Descriptions bordered column={{ xs: 1, sm: 1, md: 2 }} items={items} />
             {imageUrl && <div style={{ marginTop: 24 }}><Typography.Title level={5}>Evidence Photo</Typography.Title><Image className="detail-image" src={imageUrl} alt={`Evidence for ${ticket.title}`} style={{ maxHeight: 400, objectFit: 'contain' }} /></div>}
             
+            <Divider orientation="left" style={{ marginTop: 32 }}>Updates & Notes</Divider>
+            <List
+              itemLayout="horizontal"
+              dataSource={ticket.notes || []}
+              locale={{ emptyText: 'No updates yet.' }}
+              renderItem={(note) => (
+                // ADDED: distinct styling for private notes
+                <List.Item style={{ backgroundColor: note.isPrivate ? '#fffbe6' : 'transparent', padding: '12px', borderRadius: '6px', marginBottom: '8px' }}>
+                  <List.Item.Meta
+                    title={
+                      <Space>
+                        <Text strong>{`${note.addedBy?.firstName || 'Unknown'} ${note.addedBy?.lastName || ''} (${note.addedBy?.role || 'User'}) - ${formatDate(note.createdAt)}`}</Text>
+                        {note.isPrivate && <Tag color="warning">Internal Private Note</Tag>}
+                      </Space>
+                    }
+                    description={<span style={{ whiteSpace: 'pre-wrap', color: '#333' }}>{note.text}</span>}
+                  />
+                </List.Item>
+              )}
+            />
+            {!ticket.isArchived && (
+              <div style={{ marginTop: 16 }}>
+                <Input.TextArea
+                  rows={3}
+                  placeholder="Add a new update or note to this ticket..."
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  disabled={submittingNote || working}
+                />
+                
+                {/* ADDED: Checkbox toggle for Admins */}
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <Button
+                    type="primary"
+                    onClick={handleAddNote}
+                    loading={submittingNote}
+                    disabled={!noteText.trim()}
+                  >
+                    Post Update
+                  </Button>
+                  
+                  {isAdmin && (
+                    <Checkbox 
+                      checked={isPrivateNote} 
+                      onChange={(e) => setIsPrivateNote(e.target.checked)}
+                      disabled={submittingNote || working}
+                    >
+                      Private Internal Note (Hidden from resident)
+                    </Checkbox>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isAdmin && !ticket.isArchived && (
               <>
+                <Divider style={{ marginTop: 32 }} />
                 <div className="admin-actions">
                   {ticket.status === 'Pending' && <Button type="primary" disabled={working} onClick={() => confirmStatus('In Progress')}>Start Processing</Button>}
                   {ticket.status === 'In Progress' && <Button type="primary" disabled={working} onClick={() => confirmStatus('Resolved')}>Mark Resolved</Button>}
@@ -330,5 +398,7 @@ const TicketDetails = () => {
     </AppLayout>
   );
 };
+
+const { Text } = Typography;
 
 export default TicketDetails;

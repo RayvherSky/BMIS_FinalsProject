@@ -5,7 +5,6 @@ const Ticket = require("../models/Ticket");
 // @access  Private (Resident)
 const createTicket = async (req, res) => {
   try {
-    // ADDED customCategory to destructured body
     const { title, description, category, customCategory, priority, location } =
       req.body;
 
@@ -21,14 +20,12 @@ const createTicket = async (req, res) => {
       title,
       description,
       category,
-      // Only store custom category string if 'Others' is selected
       customCategory: category === "Others" ? customCategory : "",
       priority: priority || "Medium",
       location,
       submittedBy: req.user.id,
     };
 
-    // If file was uploaded, set image path
     if (req.file) {
       ticketData.image = `/uploads/${req.file.filename}`;
     }
@@ -52,13 +49,11 @@ const createTicket = async (req, res) => {
 const getAllTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
-
     const filter = { isArchived: false };
 
     if (category) filter.category = category;
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
-
     if (search) {
       filter.$or = [
         { title: { $regex: search, $options: "i" } },
@@ -82,16 +77,11 @@ const getAllTickets = async (req, res) => {
 const getMyTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
-
-    const filter = {
-      submittedBy: req.user.id,
-      isArchived: false,
-    };
+    const filter = { submittedBy: req.user.id, isArchived: false };
 
     if (category) filter.category = category;
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
-
     if (search) {
       filter.$or = [
         { title: { $regex: search, $options: "i" } },
@@ -116,17 +106,15 @@ const getTicketById = async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id)
       .populate("submittedBy", "firstName lastName email")
+      .populate("notes.addedBy", "firstName lastName role")
       .populate({
         path: "linkedTicket",
         select:
           req.user.role === "resident" ? "_id title submittedBy" : undefined,
       });
 
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    // If resident, verify they own the ticket
     if (
       req.user.role === "resident" &&
       ticket.submittedBy._id.toString() !== req.user.id
@@ -136,22 +124,26 @@ const getTicketById = async (req, res) => {
         .json({ message: "Not authorized to view this ticket" });
     }
 
-    // Keep duplicate navigation without exposing another resident's report.
-    if (req.user.role === "resident" && ticket.linkedTicket) {
-      const ownLinkedTicket =
-        ticket.linkedTicket.submittedBy.toString() === req.user.id;
-      const result = ticket.toObject();
-      result.linkedTicket = ownLinkedTicket
-        ? { _id: ticket.linkedTicket._id, title: ticket.linkedTicket.title }
-        : { _id: ticket.linkedTicket._id };
+    let result = ticket.toObject();
+
+    // Filter out private notes for residents and handle duplicate linking security
+    if (req.user.role === "resident") {
+      result.notes = result.notes.filter((note) => !note.isPrivate);
+
+      if (result.linkedTicket) {
+        const ownLinkedTicket =
+          ticket.linkedTicket.submittedBy.toString() === req.user.id;
+        result.linkedTicket = ownLinkedTicket
+          ? { _id: ticket.linkedTicket._id, title: ticket.linkedTicket.title }
+          : { _id: ticket.linkedTicket._id };
+      }
       return res.status(200).json(result);
     }
 
     res.status(200).json(ticket);
   } catch (error) {
-    if (error.kind === "ObjectId") {
+    if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
-    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -162,10 +154,8 @@ const getTicketById = async (req, res) => {
 const updateTicketStatus = async (req, res) => {
   try {
     const { status } = req.body;
-
-    if (!status) {
+    if (!status)
       return res.status(400).json({ message: "Please provide a status" });
-    }
 
     const validStatuses = ["Pending", "In Progress", "Resolved", "Dismissed"];
     if (!validStatuses.includes(status)) {
@@ -177,14 +167,11 @@ const updateTicketStatus = async (req, res) => {
     }
 
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     const previousStatus = ticket.status;
     ticket.status = status;
 
-    // Set or clear timestamps based on status transitions
     if (status === "Resolved") {
       ticket.resolvedAt = Date.now();
       ticket.dismissedAt = null;
@@ -192,7 +179,6 @@ const updateTicketStatus = async (req, res) => {
       ticket.dismissedAt = Date.now();
       ticket.resolvedAt = null;
     } else {
-      // Reverting from Resolved or Dismissed
       if (previousStatus === "Resolved" || previousStatus === "Dismissed") {
         ticket.resolvedAt = null;
         ticket.dismissedAt = null;
@@ -203,13 +189,13 @@ const updateTicketStatus = async (req, res) => {
 
     const updatedTicket = await Ticket.findById(ticket._id)
       .populate("submittedBy", "firstName lastName email")
+      .populate("notes.addedBy", "firstName lastName role")
       .populate("linkedTicket");
 
     res.status(200).json(updatedTicket);
   } catch (error) {
-    if (error.kind === "ObjectId") {
+    if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
-    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -220,14 +206,12 @@ const updateTicketStatus = async (req, res) => {
 const updateTicketPriority = async (req, res) => {
   try {
     const { priority } = req.body;
-
-    if (!priority) {
+    if (!priority)
       return res
         .status(400)
         .json({ message: "Please provide a priority level" });
-    }
 
-    const validPriorities = ["Low", "Medium", "High", "Urgent"]; // Matches your schema
+    const validPriorities = ["Low", "Medium", "High", "Urgent"];
     if (!validPriorities.includes(priority)) {
       return res
         .status(400)
@@ -237,22 +221,20 @@ const updateTicketPriority = async (req, res) => {
     }
 
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     ticket.priority = priority;
     await ticket.save();
 
     const updatedTicket = await Ticket.findById(ticket._id)
       .populate("submittedBy", "firstName lastName email")
+      .populate("notes.addedBy", "firstName lastName role")
       .populate("linkedTicket");
 
     res.status(200).json(updatedTicket);
   } catch (error) {
-    if (error.kind === "ObjectId") {
+    if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
-    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -263,23 +245,16 @@ const updateTicketPriority = async (req, res) => {
 const linkTicket = async (req, res) => {
   try {
     const { linkedTicketId } = req.body;
-
-    if (!linkedTicketId) {
+    if (!linkedTicketId)
       return res.status(400).json({ message: "Please provide linkedTicketId" });
-    }
 
-    // Validate both tickets exist
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     const targetTicket = await Ticket.findById(linkedTicketId);
-    if (!targetTicket) {
+    if (!targetTicket)
       return res.status(404).json({ message: "Linked ticket not found" });
-    }
 
-    // Prevent linking to itself
     if (req.params.id === linkedTicketId) {
       return res
         .status(400)
@@ -291,13 +266,13 @@ const linkTicket = async (req, res) => {
 
     const updatedTicket = await Ticket.findById(ticket._id)
       .populate("submittedBy", "firstName lastName email")
+      .populate("notes.addedBy", "firstName lastName role")
       .populate("linkedTicket");
 
     res.status(200).json(updatedTicket);
   } catch (error) {
-    if (error.kind === "ObjectId") {
+    if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
-    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -308,22 +283,65 @@ const linkTicket = async (req, res) => {
 const unlinkTicket = async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     ticket.linkedTicket = null;
     await ticket.save();
 
     const updatedTicket = await Ticket.findById(ticket._id)
       .populate("submittedBy", "firstName lastName email")
+      .populate("notes.addedBy", "firstName lastName role")
       .populate("linkedTicket");
 
     res.status(200).json(updatedTicket);
   } catch (error) {
-    if (error.kind === "ObjectId") {
+    if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+// @desc    Add a note to ticket
+// @route   POST /api/tickets/:id/notes
+// @access  Private
+const addTicketNote = async (req, res) => {
+  try {
+    const { text, isPrivate } = req.body;
+    if (!text)
+      return res.status(400).json({ message: "Note text is required" });
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    if (
+      req.user.role === "resident" &&
+      ticket.submittedBy.toString() !== req.user.id
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to modify this ticket" });
     }
+
+    const noteIsPrivate =
+      req.user.role === "admin" ? Boolean(isPrivate) : false;
+
+    ticket.notes.push({
+      text,
+      addedBy: req.user.id,
+      isPrivate: noteIsPrivate,
+    });
+
+    await ticket.save();
+
+    const updatedTicket = await Ticket.findById(ticket._id)
+      .populate("submittedBy", "firstName lastName email")
+      .populate("notes.addedBy", "firstName lastName role")
+      .populate("linkedTicket");
+
+    res.status(200).json(updatedTicket);
+  } catch (error) {
+    if (error.kind === "ObjectId")
+      return res.status(404).json({ message: "Ticket not found" });
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -337,4 +355,5 @@ module.exports = {
   updateTicketPriority,
   linkTicket,
   unlinkTicket,
+  addTicketNote,
 };

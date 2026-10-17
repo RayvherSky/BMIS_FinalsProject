@@ -35,13 +35,16 @@ export const linkTicket = async (id, linkedTicketId) => {
 };
 
 export const updateTicketPriority = async (id, priority) => {
-  const response = await api.patch(`/api/tickets/${id}/priority`, {
-    priority,
-  });
+  const response = await api.patch(`/api/tickets/${id}/priority`, { priority });
   return response.data;
 };
 
 export const unlinkTicket = async (id) => {
   const response = await api.put(`/api/tickets/${id}/unlink`);
+  return response.data;
+};
+
+export const addTicketNote = async (id, text, isPrivate = false) => {
+  const response = await api.post(`/api/tickets/${id}/notes`, { text, isPrivate });
   return response.data;
 };

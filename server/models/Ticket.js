@@ -57,6 +57,14 @@ const ticketSchema = new mongoose.Schema(
       ref: "Ticket",
       default: null,
     },
+    notes: [
+      {
+        text: { type: String, required: true },
+        addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        isPrivate: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     isArchived: {
       type: Boolean,
       default: false,
