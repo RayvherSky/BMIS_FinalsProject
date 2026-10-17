@@ -7,6 +7,7 @@ const {
   getTicketById,
   updateTicketStatus,
   linkTicket,
+  updateTicketPriority,
 } = require('../controllers/ticketController');
 const protect = require('../middleware/authMiddleware');
 const authorize = require('../middleware/roleMiddleware');
@@ -29,5 +30,8 @@ router.put('/:id/status', protect, authorize('admin'), updateTicketStatus);
 
 // Admin links a ticket to another
 router.put('/:id/link', protect, authorize('admin'), linkTicket);
+
+// Admin Updates ticket priority
+router.patch('/:id/priority', protect, authorize('admin'), updateTicketPriority);
 
 module.exports = router;

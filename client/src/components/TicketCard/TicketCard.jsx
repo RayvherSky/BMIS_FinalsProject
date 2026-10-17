@@ -1,9 +1,10 @@
 import React from 'react';
-import { Card, Tag, Typography, Space } from 'antd';
+import { Card, Tag, Typography, Space, Select } from 'antd';
 import {
   EnvironmentOutlined,
   CalendarOutlined,
   UserOutlined,
+  LinkOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import StatusBadge from '../StatusBadge/StatusBadge';
@@ -14,11 +15,12 @@ const { Text, Title } = Typography;
 
 /**
  * TicketCard component displaying a summary of a ticket.
- * Clickable to navigate to ticket details.
  * @param {Object} props
  * @param {Object} props.ticket - The ticket object
+ * @param {Array} props.availableDuplicates - List of other tickets in the same category (passed from parent)
+ * @param {Function} props.onLinkDuplicates - Callback triggered when admin links tickets
  */
-const TicketCard = ({ ticket }) => {
+const TicketCard = ({ ticket, availableDuplicates = [], onLinkDuplicates }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -33,6 +35,14 @@ const TicketCard = ({ ticket }) => {
   const submitterName = ticket.submittedBy
     ? `${ticket.submittedBy.firstName || ''} ${ticket.submittedBy.lastName || ''}`.trim()
     : 'Unknown';
+
+  // Filter options to only show tickets matching the current ticket's category
+  const categoryMatchOptions = availableDuplicates
+    .filter(dup => dup.category === ticket.category && dup._id !== ticket._id)
+    .map(dup => ({
+      label: `${dup.title} (${dup.status})`,
+      value: dup._id
+    }));
 
   return (
     <Card
@@ -79,6 +89,26 @@ const TicketCard = ({ ticket }) => {
           <UserOutlined /> {submitterName}
         </Text>
       </Space>
+
+      {/* Admin-only: Link Multiple Duplicates UI */}
+      {user?.role === 'admin' && (
+        <div 
+          style={{ marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}
+          onClick={(e) => e.stopPropagation()} // Prevents card navigation when interacting with dropdown
+        >
+          <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+            <LinkOutlined /> Link Duplicate Tickets (Same Category)
+          </Text>
+          <Select
+            mode="multiple"
+            allowClear
+            style={{ width: '100%' }}
+            placeholder="Select related tickets to clear..."
+            options={categoryMatchOptions}
+            onChange={(selectedIds) => onLinkDuplicates(ticket._id, selectedIds)}
+          />
+        </div>
+      )}
     </Card>
   );
 };
