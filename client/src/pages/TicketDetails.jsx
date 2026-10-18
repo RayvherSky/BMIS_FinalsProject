@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { getAllTickets, getTicketById, linkTicket, unlinkTicket, updateTicketStatus, updateTicketPriority, addTicketNote } from '../api/ticketApi';
 import { archiveTicket } from '../api/archiveApi';
 import { formatDate, getPriorityColor, PRIORITIES } from '../utils/helpers';
+import { getRoleLabel, getTicketBasePath, normalizeRole } from '../utils/roles';
+import AssignmentPanel from '../components/AssignmentPanel/AssignmentPanel';
 
 const TicketDetails = () => {
   const { id } = useParams();
@@ -15,11 +17,14 @@ const TicketDetails = () => {
   const screens = Grid.useBreakpoint();
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = user.role === 'admin';
-  const base = isAdmin ? '/admin' : '/resident';
+  const role = normalizeRole(user.role);
+  const isAdmin = role === 'admin';
+  const isEmployee = role === 'employee';
+  const isStaff = isAdmin || isEmployee;
+  const base = getTicketBasePath(role);
   
   const [ticket, setTicket] = useState(null);
-  const backPath = isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : '/resident/my-tickets';
+  const backPath = isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : isEmployee ? '/employee/assigned-tickets' : '/user/my-tickets';
   const [otherTickets, setOtherTickets] = useState([]);
   const [selectedDuplicates, setSelectedDuplicates] = useState([]); 
   const [loading, setLoading] = useState(true);
@@ -30,8 +35,9 @@ const TicketDetails = () => {
   const [isPrivateNote, setIsPrivateNote] = useState(false); // ADDED: state for checkbox
   const [submittingNote, setSubmittingNote] = useState(false);
   
-  const view = useMemo(() => ({ id }), [id, isAdmin]);
+  const view = useMemo(() => ({ id }), [id, role]);
   const currentView = useRef(view);
+  const accessVersion = useRef(0);
   const confirmation = useRef(null);
   currentView.current = view;
 
@@ -46,6 +52,7 @@ const TicketDetails = () => {
     setSelectedDuplicates([]); 
     setNoteText('');
     setIsPrivateNote(false);
+    setSubmittingNote(false);
     
     const loadTicket = async () => {
       try {
@@ -78,12 +85,33 @@ const TicketDetails = () => {
     };
   }, [id, isAdmin, view]);
 
+  const handleAccessError = err => {
+    if (currentView.current !== view) return;
+    const explanation = err.response?.data?.message || 'Unable to load ticket';
+    if (isEmployee && [403, 404].includes(err.response?.status)) {
+      accessVersion.current += 1;
+      setTicket(null);
+      setNoteText('');
+      setError(explanation);
+    } else message.error(explanation);
+  };
+
+  const refreshTicket = async () => {
+    const requestedAccessVersion = accessVersion.current;
+    setWorking(true);
+    try {
+      const updated = await getTicketById(id);
+      if (currentView.current === view && requestedAccessVersion === accessVersion.current) { setTicket(updated); setError(''); }
+    } catch (err) { handleAccessError(err); }
+    finally { if (currentView.current === view) setWorking(false); }
+  };
+
   const confirmStatus = (status) => {
     confirmation.current = Modal.confirm({
       title: `Change status to ${status}?`,
       content: status === 'Resolved'
         ? 'This will resolve the report and move it to Archive immediately.'
-        : 'The resident will see the updated status on their ticket.',
+        : 'The user will see the updated status on their ticket.',
       okText: 'Confirm',
       cancelText: 'Cancel',
       onOk: async () => {
@@ -205,17 +233,18 @@ const TicketDetails = () => {
 
   const handleAddNote = async () => {
     if (!noteText.trim() || currentView.current !== view) return;
+    const requestedAccessVersion = accessVersion.current;
     setSubmittingNote(true);
     try {
       // Pass the isPrivateNote status to the API
       const updated = await addTicketNote(id, noteText, isPrivateNote);
-      if (currentView.current !== view) return;
+      if (currentView.current !== view || requestedAccessVersion !== accessVersion.current) return;
       setTicket(updated);
       setNoteText('');
       setIsPrivateNote(false); // reset toggle
       message.success(isPrivateNote ? 'Private internal note saved' : 'Update added successfully');
     } catch (err) {
-      if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to add note');
+      if (currentView.current === view) handleAccessError(err);
     } finally {
       if (currentView.current === view) setSubmittingNote(false);
     }
@@ -248,7 +277,8 @@ const TicketDetails = () => {
       )
     },
     { key: 'location', label: 'Location', children: ticket.location },
-    { key: 'submitter', label: 'Submitted By', children: ticket.submittedBy ? `${ticket.submittedBy.firstName} ${ticket.submittedBy.lastName} (${ticket.submittedBy.email})` : 'Unknown', span: 2 },
+    { key: 'submitter', label: 'Submitted By', children: ticket.submittedBy ? `${ticket.submittedBy.firstName} ${ticket.submittedBy.lastName}${ticket.submittedBy.email ? ` (${ticket.submittedBy.email})` : ''}` : 'Unknown', span: 2 },
+    ...(!isAdmin ? [{ key: 'assignment', label: 'Assigned Employee', children: ticket.assignedTo ? `${ticket.assignedTo.firstName} ${ticket.assignedTo.lastName}` : 'Awaiting assignment', span: 2 }] : []),
     { key: 'created', label: 'Date Submitted', children: formatDate(ticket.createdAt), span: 2 },
     ...(ticket.resolvedAt ? [{ key: 'resolved', label: 'Resolved At', children: formatDate(ticket.resolvedAt), span: 2 }] : []),
     ...(ticket.dismissedAt ? [{ key: 'dismissed', label: 'Dismissed At', children: formatDate(ticket.dismissedAt), span: 2 }] : []),
@@ -288,17 +318,19 @@ const TicketDetails = () => {
   const imageUrl = ticket?.image ? (ticket.image.startsWith('/uploads/') ? ticket.image : `/uploads/${ticket.image}`) : '';
 
   const duplicateOptions = ticket ? otherTickets
-    .filter((item) => item.category === ticket.category && !item.linkedTicket)
+    .filter((item) => item.category === ticket.category && !item.linkedTicket && item.status !== 'Resolved' && !item.isArchived)
     .map((item) => ({ value: item._id, label: `${item.title} (${item.status})` })) 
     : [];
 
   return (
     <>
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ marginBottom: 20 }}>Back to tickets</Button>
+      {isEmployee && <Button className="detail-refresh" onClick={refreshTicket} disabled={working || loading}>Refresh details</Button>}
       <Spin spinning={loading} tip="Loading ticket...">
         {error ? <Result status="warning" title={error} /> : ticket && (
           <Card className="detail-card" title={<h1 style={{ fontSize: 22, color: '#0A4D68', margin: 0 }}>Ticket Details</h1>}>
             <Descriptions bordered layout={screens.sm ? 'horizontal' : 'vertical'} column={{ xs: 1, sm: 1, md: 2 }} items={items} />
+            {isAdmin && <AssignmentPanel ticket={ticket} disabled={working} onUpdate={updated => { if (currentView.current === view) setTicket(updated); }} />}
             {imageUrl && <div style={{ marginTop: 24 }}><Typography.Title level={5}>Evidence Photo</Typography.Title><Image className="detail-image" src={imageUrl} alt={`Evidence for ${ticket.title}`} style={{ maxHeight: 400, objectFit: 'contain' }} /></div>}
             
             <Divider orientation="left" style={{ marginTop: 32 }}>Updates & Notes</Divider>
@@ -312,8 +344,9 @@ const TicketDetails = () => {
                   <List.Item.Meta
                     title={
                       <Space wrap>
-                        <Text strong>{`${note.addedBy?.firstName || 'Unknown'} ${note.addedBy?.lastName || ''} (${note.addedBy?.role || 'User'}) - ${formatDate(note.createdAt)}`}</Text>
+                        <Text strong>{`${note.addedBy?.firstName || 'Unknown'} ${note.addedBy?.lastName || ''} (${getRoleLabel(note.authorRole || note.addedBy?.role)}) - ${formatDate(note.createdAt)}`}</Text>
                         {note.isPrivate && <Tag color="warning">Internal Private Note</Tag>}
+                        {!note.isPrivate && note.kind && <span className="communication-label">{note.kind === 'reply' ? 'User reply' : 'Progress update'}</span>}
                       </Space>
                     }
                     description={<span style={{ whiteSpace: 'pre-wrap', color: '#333' }}>{note.text}</span>}
@@ -342,13 +375,13 @@ const TicketDetails = () => {
                     Post Update
                   </Button>
                   
-                  {isAdmin && (
+                  {isStaff && (
                     <Checkbox 
                       checked={isPrivateNote} 
                       onChange={(e) => setIsPrivateNote(e.target.checked)}
                       disabled={submittingNote || working}
                     >
-                      Private Internal Note (Hidden from resident)
+                      Private Internal Note (Hidden from users)
                     </Checkbox>
                   )}
                 </div>
@@ -365,10 +398,10 @@ const TicketDetails = () => {
                   {['Resolved', 'Dismissed'].includes(ticket.status) && <Button type="primary" disabled={working} onClick={confirmArchive}>Archive Ticket</Button>}
                 </div>
                 
-                <div style={{ marginTop: 24, padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
+                {ticket.status !== 'Resolved' && <div style={{ marginTop: 24, padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
                   <Typography.Title level={5}>Link Multiple Duplicates (Category: {ticket.category})</Typography.Title>
                   <Typography.Text type="secondary" style={{ display: 'block', marginBottom: '12px' }}>
-                    Select other active tickets in the same category to link and clear them as duplicates of this ticket.
+                    Select other unresolved active tickets in the same category to link as duplicates of this ticket.
                   </Typography.Text>
                   
                   <Space.Compact direction={screens.sm ? 'horizontal' : 'vertical'} style={{ width: '100%', maxWidth: 600 }}>
@@ -394,7 +427,7 @@ const TicketDetails = () => {
                       Link Selected
                     </Button>
                   </Space.Compact>
-                </div>
+                </div>}
               </>
             )}
             

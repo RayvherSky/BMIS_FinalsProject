@@ -66,7 +66,7 @@ test('AUD-06 registration accepts optional blanks and the supported mobile forma
     await register({ body: { firstName: 'Test', lastName: 'Phone', email: 'phone@example.com', password: 'Password123!', phone } }, res);
     assert.equal(res.statusCode, 201, `phone=${JSON.stringify(phone)}`);
     assert.equal(res.body.user.phone, phone || '');
-    assert.equal(res.body.user.role, 'resident');
+    assert.equal(res.body.user.role, 'user');
   }
 });
 

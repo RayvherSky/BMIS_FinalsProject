@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Form, Input, Modal, Select, Space, Spin, Table, Tag, message } from 'antd';
-import { changeUserRole, getAllUsers, updateUser } from '../api/userApi';
+import { changeUserRole, getAllUsers, setUserActive, updateUser } from '../api/userApi';
 import { formatDate } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 import { PHONE_HELP, phoneRulesFor } from '../utils/phone';
+import { getRoleLabel, normalizeRole, ROLE_OPTIONS } from '../utils/roles';
 
 const UserManagement = () => {
   const { user: currentUser } = useAuth();
@@ -12,7 +13,11 @@ const UserManagement = () => {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
   const [roleTarget, setRoleTarget] = useState(null);
-  const [nextRole, setNextRole] = useState('resident');
+  const [nextRole, setNextRole] = useState('user');
+  const [activeTarget, setActiveTarget] = useState(null);
+  const [activeEmail, setActiveEmail] = useState('');
+  const [changingActive, setChangingActive] = useState(false);
+  const [roleFilter, setRoleFilter] = useState();
   const [confirmationEmail, setConfirmationEmail] = useState('');
   const [changingRole, setChangingRole] = useState(false);
   const [search, setSearch] = useState('');
@@ -45,11 +50,11 @@ const UserManagement = () => {
 
   const openRoleChange = (user) => {
     setRoleTarget(user);
-    setNextRole(user.role);
+    setNextRole(normalizeRole(user.role));
     setConfirmationEmail('');
   };
 
-  const canChangeRole = roleTarget && nextRole !== roleTarget.role
+  const canChangeRole = roleTarget && nextRole !== normalizeRole(roleTarget.role)
     && confirmationEmail.trim().toLowerCase() === roleTarget.email.toLowerCase();
 
   const saveRole = async () => {
@@ -66,6 +71,18 @@ const UserManagement = () => {
     } finally {
       setChangingRole(false);
     }
+  };
+
+  const canChangeActive = activeTarget && activeEmail.trim().toLowerCase() === activeTarget.email.toLowerCase();
+  const saveActive = async () => {
+    if (!canChangeActive || changingActive) return;
+    setChangingActive(true);
+    try {
+      await setUserActive(activeTarget._id, activeTarget.isActive === false, activeEmail);
+      message.success(activeTarget.isActive === false ? 'Account activated' : 'Account deactivated');
+      setActiveTarget(null); setReload(value => value + 1);
+    } catch (error) { message.error(error.response?.data?.message || 'Unable to update account status'); }
+    finally { setChangingActive(false); }
   };
 
   const save = async (values) => {
@@ -92,7 +109,8 @@ const UserManagement = () => {
   const columns = [
     { title: 'Name', key: 'name', render: (_, user) => `${user.firstName} ${user.lastName}` },
     { title: 'Email', dataIndex: 'email' },
-    { title: 'Role', dataIndex: 'role', render: (value) => <Tag color={value === 'admin' ? 'blue' : 'green'}>{value}</Tag> },
+    { title: 'Role', dataIndex: 'role', render: (value) => <Tag color={value === 'admin' ? 'blue' : value === 'employee' ? 'cyan' : 'green'}>{getRoleLabel(value)}</Tag> },
+    { title: 'Account', dataIndex: 'isActive', render: value => <Tag color={value === false ? 'default' : 'success'}>{value === false ? 'Inactive' : 'Active'}</Tag> },
     { title: 'Phone', dataIndex: 'phone', render: (value) => value || 'Not provided' },
     { title: 'Address', dataIndex: 'address', render: (value) => value || 'Not provided' },
     { title: 'Registered', dataIndex: 'createdAt', render: (value) => formatDate(value) },
@@ -100,6 +118,7 @@ const UserManagement = () => {
       <Space wrap>
         <Button type="link" onClick={() => edit(user)}>Edit</Button>
         <Button type="link" danger onClick={() => openRoleChange(user)}>Change Role</Button>
+        <Button type="link" danger={user.isActive !== false} disabled={user._id === currentUser._id} onClick={() => { setActiveTarget(user); setActiveEmail(''); }}>{user.isActive === false ? 'Activate' : 'Deactivate'}</Button>
       </Space>
     ) },
   ];
@@ -107,8 +126,8 @@ const UserManagement = () => {
   return (
     <>
       <h1 className="page-title">User Management</h1>
-      <div className="filter-bar"><Input.Search placeholder="Search users by name or email" allowClear onSearch={(value) => setSearch(value.trim())} style={{ maxWidth: 420 }} /></div>
-      <Spin spinning={loading} tip="Loading users..."><Table rowKey="_id" columns={columns} dataSource={users} scroll={{ x: 1100 }} pagination={{ current: page, onChange: setPage, defaultPageSize: 10, showSizeChanger: false }} /></Spin>
+      <div className="filter-bar"><Input.Search placeholder="Search users by name or email" allowClear onSearch={(value) => setSearch(value.trim())} style={{ maxWidth: 420 }} /><Select aria-label="Account role filter" placeholder="All roles" allowClear value={roleFilter} onChange={value => { setRoleFilter(value); setPage(1); }} options={ROLE_OPTIONS} style={{ minWidth: 160 }} virtual={false} /></div>
+      <Spin spinning={loading} tip="Loading users..."><Table rowKey="_id" columns={columns} dataSource={roleFilter ? users.filter(user => normalizeRole(user.role) === roleFilter) : users} scroll={{ x: 1200 }} pagination={{ current: page, onChange: setPage, defaultPageSize: 10, showSizeChanger: false }} /></Spin>
       <Modal title="Edit User" open={!!editing} onCancel={() => setEditing(null)} footer={null} closable={!saving} maskClosable={!saving}>
         <Spin spinning={saving}>
           <Form form={form} layout="vertical" onFinish={save}>
@@ -140,18 +159,26 @@ const UserManagement = () => {
           message="This changes account permissions"
           description={nextRole === 'admin'
             ? 'Admins can manage all reports and users. Grant this access only to authorized staff.'
-            : 'Resident access cannot manage other users or reports. Changing your own role will remove your admin access.'}
+            : nextRole === 'employee'
+              ? 'Employees can view and update only their assigned active tickets. They cannot change ticket status, priority, assignments or other accounts.'
+              : 'Users can submit and follow their own reports. Changing your own role will remove your admin access.'}
           style={{ marginBottom: 20 }}
         />
+        {normalizeRole(roleTarget?.role) === 'employee' && nextRole !== 'employee' && <Alert type="warning" message="All active assignments for this employee will be cleared. Ticket status and history will be preserved." style={{ marginBottom: 16 }} />}
         <p style={{ marginBottom: 16 }}>Account: <strong>{roleTarget?.firstName} {roleTarget?.lastName}</strong><br />{roleTarget?.email}</p>
         <Form layout="vertical">
           <Form.Item label="New Role" htmlFor="new-user-role">
-            <Select id="new-user-role" aria-label="New Role" value={nextRole} onChange={setNextRole} disabled={changingRole} virtual={false} options={[{ value: 'admin', label: 'Admin' }, { value: 'resident', label: 'Resident' }]} />
+            <Select id="new-user-role" aria-label="New Role" value={nextRole} onChange={setNextRole} disabled={changingRole} virtual={false} options={ROLE_OPTIONS} />
           </Form.Item>
           <Form.Item label="Confirm account email" htmlFor="confirm-role-email" extra={`Type ${roleTarget?.email || 'the account email'} to confirm.`}>
             <Input id="confirm-role-email" aria-label="Confirm account email" autoComplete="off" value={confirmationEmail} onChange={event => setConfirmationEmail(event.target.value)} disabled={changingRole} />
           </Form.Item>
         </Form>
+      </Modal>
+      <Modal title={activeTarget?.isActive === false ? 'Activate Account' : 'Deactivate Account'} open={!!activeTarget} onCancel={() => { if (!changingActive) setActiveTarget(null); }} onOk={saveActive} okText="Confirm Account Status" confirmLoading={changingActive} okButtonProps={{ danger: activeTarget?.isActive !== false, disabled: !canChangeActive }} cancelButtonProps={{ disabled: changingActive }} closable={!changingActive} maskClosable={!changingActive}>
+        <Alert type="warning" showIcon message={activeTarget?.isActive === false ? 'This account will be able to sign in again.' : 'This account will lose access immediately.'} description={normalizeRole(activeTarget?.role) === 'employee' ? 'Deactivation clears active assignments and preserves ticket history. Reactivation does not restore old assignments.' : undefined} style={{ marginBottom: 20 }} />
+        <p>{activeTarget?.firstName} {activeTarget?.lastName} · {activeTarget?.email}</p>
+        <Form layout="vertical"><Form.Item label="Confirm account email" htmlFor="confirm-active-email" extra={`Type ${activeTarget?.email || 'the account email'} to confirm.`}><Input id="confirm-active-email" value={activeEmail} onChange={event => setActiveEmail(event.target.value)} autoComplete="off" disabled={changingActive} /></Form.Item></Form>
       </Modal>
     </>
   );

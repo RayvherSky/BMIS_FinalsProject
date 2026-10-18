@@ -57,11 +57,23 @@ const ticketSchema = new mongoose.Schema(
       ref: "Ticket",
       default: null,
     },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    assignedAt: { type: Date, default: null },
+    assignmentHistory: [{
+      previousEmployee: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      newEmployee: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+      createdAt: { type: Date, default: Date.now },
+      action: { type: String, enum: ['assigned', 'reassigned', 'unassigned'], required: true },
+      reason: String,
+    }],
     notes: [
       {
         text: { type: String, required: true },
         addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         isPrivate: { type: Boolean, default: false },
+        kind: { type: String, enum: ['reply', 'update', 'internal'] },
+        authorRole: { type: String, enum: ['admin', 'employee', 'user'] },
         createdAt: { type: Date, default: Date.now },
       },
     ],

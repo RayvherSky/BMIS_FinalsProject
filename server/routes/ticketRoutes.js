@@ -14,21 +14,23 @@ const {
 const protect = require("../middleware/authMiddleware");
 const authorize = require("../middleware/roleMiddleware");
 const upload = require("../middleware/uploadMiddleware");
+const { assignTicket } = require('../controllers/assignmentController');
 
 // Resident creates ticket with optional image upload
-router.post("/", protect, authorize("resident"), upload, createTicket);
+router.post("/", protect, authorize("user"), upload, createTicket);
 
 // Admin gets all tickets
-router.get("/", protect, authorize("admin"), getAllTickets);
+router.get("/", protect, authorize("admin", "employee"), getAllTickets);
 
 // Any authenticated user gets their own tickets
-router.get("/my-tickets", protect, getMyTickets);
+router.get("/my-tickets", protect, authorize("admin", "user"), getMyTickets);
 
 // Any authenticated user gets a ticket by ID
 router.get("/:id", protect, getTicketById);
 
 // Any authenticated user can add a note
 router.post("/:id/notes", protect, addTicketNote);
+router.patch('/:id/assign', protect, authorize('admin'), assignTicket);
 
 // Admin updates ticket status
 router.put("/:id/status", protect, authorize("admin"), updateTicketStatus);

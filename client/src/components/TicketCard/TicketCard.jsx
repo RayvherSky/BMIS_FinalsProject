@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import StatusBadge from '../StatusBadge/StatusBadge';
 import { formatDate, getPriorityColor, getCategoryColor } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
+import { getTicketBasePath } from '../../utils/roles';
 
 const { Text, Title } = Typography;
 
@@ -25,11 +26,8 @@ const TicketCard = ({ ticket, availableDuplicates = [], onLinkDuplicates }) => {
   const { user } = useAuth();
 
   const handleClick = () => {
-    if (user?.role === 'admin') {
-      navigate(`/admin/ticket/${ticket._id}`);
-    } else {
-      navigate(`/resident/ticket/${ticket._id}`);
-    }
+    const base = getTicketBasePath(user?.role);
+    if (base) navigate(`${base}/ticket/${ticket._id}`);
   };
 
   const submitterName = ticket.submittedBy
@@ -67,7 +65,7 @@ const TicketCard = ({ ticket, availableDuplicates = [], onLinkDuplicates }) => {
       </Title>
 
       <div className="ticket-meta">
-        <Tag color={getCategoryColor(ticket.category)}>{ticket.category}</Tag>
+        <Tag color={getCategoryColor(ticket.category)}>{ticket.category === 'Others' && ticket.customCategory ? `Others (${ticket.customCategory})` : ticket.category}</Tag>
         <StatusBadge status={ticket.status} />
         <Tag color={getPriorityColor(ticket.priority)}>{ticket.priority}</Tag>
       </div>

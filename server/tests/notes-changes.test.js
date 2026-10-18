@@ -94,7 +94,7 @@ test('NOTES-role ordinary contact edits preserve role and exclude the password',
   const f = await fixture(t);
   const result = await f.send(`/api/users/${residentId}`, { phone: '09171234567', address: 'Updated address' }, 'admin-fixture', 'PUT');
   assert.equal(result.status, 200);
-  assert.equal(result.body.role, 'resident');
+  assert.equal(result.body.role, 'user');
   assert.equal(result.body.address, 'Updated address');
   assert.equal(Object.hasOwn(result.body, 'password'), false);
 });
@@ -133,7 +133,7 @@ test('NOTES-role confirmed promotion/demotion persists and changes access on an 
   assert.equal((await f.send('/api/users', undefined, 'resident-fixture', 'GET')).status, 200);
   const demoted = await f.send(path, { role: 'resident', confirmationEmail: 'resident@example.com' });
   assert.equal(demoted.status, 200);
-  assert.equal(demoted.body.role, 'resident');
+  assert.equal(demoted.body.role, 'user');
   assert.equal((await f.send('/api/users', undefined, 'resident-fixture', 'GET')).status, 403);
   assert.equal(f.accounts.get(residentId).firstName, 'Test');
 });
@@ -292,4 +292,24 @@ test('NAV-archive residents cannot resolve or archive reports and invalid reques
   assert.equal((await f.send(`/api/archive/${ticket._id}/archive`, {}, 'admin-fixture', 'PUT')).status, 400);
   assert.equal(f.reports.get(ticket._id).status, 'Pending');
   assert.equal(f.reports.get(ticket._id).isArchived, false);
+});
+
+test('LINK resolved or archived reports cannot be either side of a new duplicate link', async t => {
+  const f = await fixture(t);
+  const child = await createReport(f);
+  const master = await createReport(f);
+  for (const id of [child._id, master._id]) {
+    const record = f.reports.get(id);
+    for (const [status, archived] of [['Resolved', false], ['Resolved', true], ['Pending', true]]) {
+      record.status = status;
+      record.isArchived = archived;
+      const result = await f.send(`/api/tickets/${child._id}/link`, { linkedTicketId: master._id }, 'admin-fixture', 'PUT');
+      assert.equal(result.status, 400, `${id}: ${status}/${archived}`);
+      assert.equal(f.reports.get(child._id).linkedTicket, null);
+    }
+    record.status = 'Pending';
+    record.isArchived = false;
+  }
+  assert.equal((await f.send(`/api/tickets/${child._id}/link`, { linkedTicketId: master._id }, 'admin-fixture', 'PUT')).status, 200);
+  assert.equal(String(f.reports.get(child._id).linkedTicket), master._id);
 });

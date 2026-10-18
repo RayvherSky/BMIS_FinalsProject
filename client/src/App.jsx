@@ -5,6 +5,9 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import AppLayout from './components/Layout/AppLayout';
+import LegacyUserRedirect from './components/ProtectedRoute/LegacyUserRedirect';
+import EmployeeQueue from './pages/EmployeeQueue';
+import './roles.css';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -75,12 +78,17 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route path="/profile" element={<Profile />} />
-                {/* Protected: resident role */}
-                <Route element={<ProtectedRoute allowedRoles={['resident']} />}>
-                  <Route path="/resident/dashboard" element={<ResidentDashboard />} />
-                  <Route path="/resident/submit-ticket" element={<SubmitTicket />} />
-                  <Route path="/resident/my-tickets" element={<MyTickets />} />
-                  <Route path="/resident/ticket/:id" element={<TicketDetails />} />
+                {/* Canonical User routes and existing-link compatibility. */}
+                <Route element={<ProtectedRoute allowedRoles={['user']} />}>
+                  <Route path="/user/dashboard" element={<ResidentDashboard />} />
+                  <Route path="/user/submit-ticket" element={<SubmitTicket />} />
+                  <Route path="/user/my-tickets" element={<MyTickets />} />
+                  <Route path="/user/ticket/:id" element={<TicketDetails />} />
+                  <Route path="/resident/*" element={<LegacyUserRedirect />} />
+                </Route>
+                <Route element={<ProtectedRoute allowedRoles={['employee']} />}>
+                  <Route path="/employee/assigned-tickets" element={<EmployeeQueue />} />
+                  <Route path="/employee/ticket/:id" element={<TicketDetails />} />
                 </Route>
                 {/* Protected: admin role */}
                 <Route element={<ProtectedRoute allowedRoles={['admin']} />}>

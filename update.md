@@ -29,6 +29,9 @@
 
 ## TO CHANGE
 
+- [x] Live ticket search by title, submitted by, category, status, priority, location, and date; multiple results and optional fuzzy matching. (18 October; focused checks pass; browser verification pending.)
+- [x] Dashboard tiles open matching searchable ticket groups; admin status tiles include active and archived reports. (Confirmed by user; browser verification pending.)
+- [x] Exclude resolved reports from new linking in UI/API, including stale direct requests. (Focused HTTP guard checks pass.)
 - [x]  Auto archive newly Resolved tickets immediately; Dismissed stays manual. Archive tabs: All / Resolved / Dismissed plus category filter. (18 October; seven focused HTTP checks pass; existing records unchanged.)
 - [x]  Move the barangay logo on the upper right of the form. and then make it prettier. (Login updated 18 October; browser verification pending.)
 - [x]  MAKE ROLE SWITCH HARDER TO DO OR SEPERATE IT FORM THE EDIT TABS (Separate confirmed action and API implemented; focused checks pass.)

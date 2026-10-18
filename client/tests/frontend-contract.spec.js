@@ -27,7 +27,7 @@ test(`AUD-06 ${editor} form preserves an unchanged legacy contact when editing a
   let stored = { ...resident, phone: 'legacy contact' };
   const currentUser = editor === 'admin' ? { ...resident, _id: '000000000000000000000002', role: 'admin' } : stored;
   await page.route('**/api/auth/me', route => route.fulfill({ json: currentUser }));
-  await page.route('**/api/users', route => route.fulfill({ json: [stored] }));
+  await page.route(url => url.pathname === '/api/users', route => route.fulfill({ json: [stored] }));
   const updatePath = editor === 'admin' ? `/api/users/${resident._id}` : '/api/auth/profile';
   await page.route(`**${updatePath}`, route => {
     stored = { ...stored, ...route.request().postDataJSON() };
@@ -112,4 +112,90 @@ test('resident pages fit a narrow phone viewport', async ({ page }) => {
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   }
+});
+
+test('REVAMP Employee workspace contains only operational navigation and assigned records', async ({ page }) => {
+  const employee = { ...resident, _id: 'employee-one', role: 'employee' };
+  await page.route('**/api/auth/me', route => route.fulfill({ json: employee }));
+  await page.route(url => url.pathname === '/api/tickets', route => route.fulfill({ json: [{
+    _id: 'assigned-one', title: 'Assigned drainage inspection', category: 'Others', customCategory: 'Drainage inspection',
+    status: 'In Progress', priority: 'High', location: 'Baclaran', assignedTo: employee,
+    createdAt: '2026-10-18T00:00:00Z', updatedAt: '2026-10-19T00:00:00Z',
+  }] }));
+  await page.goto('/employee/assigned-tickets');
+  await expect(page.getByRole('heading', { name: 'Assigned Tickets', exact: true })).toBeVisible();
+  await expect(page.getByText('Assigned drainage inspection', { exact: true })).toBeVisible();
+  await expect(page.getByText('Others (Drainage inspection)', { exact: true })).toBeVisible();
+  const navigation = page.getByRole('navigation', { name: 'Primary navigation' });
+  await expect(navigation.getByRole('menuitem')).toHaveCount(2);
+  await expect(navigation.getByRole('menuitem', { name: /Archive|Users|Dashboard/ })).toHaveCount(0);
+  await expect(page.locator('.role-employee')).toBeVisible();
+});
+
+test('REVAMP legacy User list links retain the selected status on their canonical route', async ({ page }) => {
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { ...resident, role: 'user' } }));
+  await page.route('**/api/tickets/my-tickets*', route => route.fulfill({ json: [] }));
+  await page.goto('/resident/my-tickets?status=Pending');
+  await expect(page).toHaveURL(/\/user\/my-tickets\?status=Pending$/);
+  await expect(page.getByRole('heading', { name: 'My Tickets', exact: true })).toBeVisible();
+  await expect(page.locator('.role-user')).toBeVisible();
+});
+
+test('REVAMP Employee note denial clears previously visible restricted ticket details', async ({ page }) => {
+  const employee = { ...resident, _id: 'employee-one', role: 'employee' };
+  await page.route('**/api/auth/me', route => route.fulfill({ json: employee }));
+  await page.route('**/api/tickets/assigned-one', route => route.fulfill({ json: {
+    _id: 'assigned-one', title: 'Restricted assignment content', description: 'Only the current assignee may view this.',
+    category: 'Infrastructure', status: 'In Progress', priority: 'Medium', location: 'Baclaran', assignedTo: employee, notes: [],
+  } }));
+  await page.route('**/api/tickets/assigned-one/notes', route => route.fulfill({ status: 403, json: { message: 'This ticket is no longer assigned to you' } }));
+  await page.goto('/employee/ticket/assigned-one');
+  await expect(page.getByText('Restricted assignment content', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark Resolved', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Link to Duplicate', exact: true })).toHaveCount(0);
+  await page.getByPlaceholder('Add a new update or note to this ticket...').fill('Inspection completed');
+  await page.getByRole('button', { name: 'Post Update', exact: true }).click();
+  await expect(page.getByText('This ticket is no longer assigned to you', { exact: true })).toBeVisible();
+  await expect(page.getByText('Restricted assignment content', { exact: true })).toHaveCount(0);
+});
+
+test('REVAMP a late Employee refresh cannot restore ticket details after a note access denial', async ({ page }) => {
+  const employee = { ...resident, _id: 'employee-one', role: 'employee' };
+  const ticket = { _id: 'assigned-race', title: 'Revoked assignment content', description: 'Current assignee only.',
+    category: 'Infrastructure', status: 'In Progress', priority: 'Medium', location: 'Baclaran', assignedTo: employee, notes: [] };
+  await page.route('**/api/auth/me', route => route.fulfill({ json: employee }));
+  let releaseNote, releaseRefresh;
+  const noteGate = new Promise(resolve => { releaseNote = resolve; });
+  const refreshGate = new Promise(resolve => { releaseRefresh = resolve; });
+  let holdRefresh = false;
+  await page.route('**/api/tickets/assigned-race', async route => {
+    if (holdRefresh) await refreshGate;
+    await route.fulfill({ json: ticket });
+  });
+  await page.route('**/api/tickets/assigned-race/notes', async route => {
+    await noteGate;
+    await route.fulfill({ status: 403, json: { message: 'Assignment was revoked' } });
+  });
+  try {
+    await page.goto('/employee/ticket/assigned-race');
+    await expect(page.getByText(ticket.title, { exact: true })).toBeVisible();
+    await page.getByPlaceholder('Add a new update or note to this ticket...').fill('Inspection update');
+    const posting = page.waitForRequest('**/api/tickets/assigned-race/notes');
+    await page.getByRole('button', { name: 'Post Update', exact: true }).click();
+    await posting;
+    holdRefresh = true;
+    const refreshing = page.waitForRequest('**/api/tickets/assigned-race');
+    await page.getByRole('button', { name: 'Refresh details', exact: true }).click();
+    await refreshing;
+    releaseNote();
+    await expect(page.getByText('Assignment was revoked', { exact: true })).toBeVisible();
+    await expect(page.getByText(ticket.title, { exact: true })).toHaveCount(0);
+    const refreshed = page.waitForResponse('**/api/tickets/assigned-race');
+    releaseRefresh();
+    await (await refreshed).finished();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.getByText(ticket.title, { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Assignment was revoked', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Post Update', exact: true })).toHaveCount(0);
+  } finally { releaseNote(); releaseRefresh(); }
 });

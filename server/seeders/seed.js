@@ -1,12 +1,14 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const path = require('path');
+const { readFile } = require('node:fs/promises');
 
 // Load env from server directory
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
+const { provisionAccounts, DEFAULT_CREDENTIALS_PATH } = require('../scripts/provision-accounts');
 
 const seedDB = async () => {
   try {
@@ -44,7 +46,7 @@ const seedDB = async () => {
         lastName: 'Reyes',
         email: 'ana.reyes@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09191234569',
         address: '78 Quirino Avenue, Barangay Baclaran, Parañaque City',
       },
@@ -53,7 +55,7 @@ const seedDB = async () => {
         lastName: 'Garcia',
         email: 'pedro.garcia@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09201234570',
         address: '156 Ocean Drive, Barangay Baclaran, Parañaque City',
       },
@@ -62,7 +64,7 @@ const seedDB = async () => {
         lastName: 'Martinez',
         email: 'rosa.martinez@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09211234571',
         address: '32 Taft Avenue Extension, Barangay Baclaran, Parañaque City',
       },
@@ -71,7 +73,7 @@ const seedDB = async () => {
         lastName: 'Bautista',
         email: 'carlos.bautista@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09221234572',
         address: '89 F.B. Harrison Street, Barangay Baclaran, Parañaque City',
       },
@@ -80,7 +82,7 @@ const seedDB = async () => {
         lastName: 'Villanueva',
         email: 'elena.villanueva@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09231234573',
         address: '210 Coastal Road, Barangay Baclaran, Parañaque City',
       },
@@ -89,7 +91,7 @@ const seedDB = async () => {
         lastName: 'Aquino',
         email: 'roberto.aquino@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09241234574',
         address: '67 Multinational Avenue, Barangay Baclaran, Parañaque City',
       },
@@ -98,7 +100,7 @@ const seedDB = async () => {
         lastName: 'Fernandez',
         email: 'lorna.fernandez@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09251234575',
         address: '143 San Antonio Street, Barangay Baclaran, Parañaque City',
       },
@@ -107,7 +109,7 @@ const seedDB = async () => {
         lastName: 'Torres',
         email: 'miguel.torres@email.com',
         password: 'Password123!',
-        role: 'resident',
+        role: 'user',
         phone: '09261234576',
         address: '55 Airport Road, Barangay Baclaran, Parañaque City',
       },
@@ -439,22 +441,22 @@ const seedDB = async () => {
     const tickets = await Ticket.insertMany(ticketsData);
     console.log(`${tickets.length} tickets created.`);
 
+    const credentialsPath = process.env.BMIS_DEMO_CREDENTIALS_PATH || DEFAULT_CREDENTIALS_PATH;
+    const dispatch = await provisionAccounts({ credentialsPath });
+    const credentials = JSON.parse(await readFile(credentialsPath, 'utf8'));
+    const passwords = new Map(credentials.accounts.map(account => [account.email, account.password]));
+    const seedAccounts = [...usersData, ...dispatch.accounts.map(account => ({ ...account, password: passwords.get(account.email) }))];
+
     console.log('\n========================================');
-    console.log('  Database seeded successfully!');
+    console.log(`  Database seeded successfully! ${seedAccounts.length} accounts available.`);
     console.log('========================================');
-    console.log('\nAdmin Accounts:');
-    console.log('  maria.santos@email.com / Password123!');
-    console.log('  juan.delacruz@email.com / Password123!');
-    console.log('\nResident Accounts:');
-    console.log('  ana.reyes@email.com / Password123!');
-    console.log('  pedro.garcia@email.com / Password123!');
-    console.log('  rosa.martinez@email.com / Password123!');
-    console.log('  carlos.bautista@email.com / Password123!');
-    console.log('  elena.villanueva@email.com / Password123!');
-    console.log('  roberto.aquino@email.com / Password123!');
-    console.log('  lorna.fernandez@email.com / Password123!');
-    console.log('  miguel.torres@email.com / Password123!');
-    console.log('\nAll passwords: Password123!');
+    for (const [role, label] of [['admin', 'Admin'], ['employee', 'Employee'], ['user', 'User']]) {
+      console.log(`\n${label} Accounts:`);
+      for (const account of seedAccounts.filter(account => account.role === role)) {
+        console.log(`  ${account.email} / ${account.password}`);
+      }
+    }
+    console.log(`\nDispatch account passwords saved in: ${credentialsPath}`);
     console.log('========================================\n');
 
     process.exit(0);

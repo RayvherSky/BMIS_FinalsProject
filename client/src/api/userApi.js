@@ -19,3 +19,7 @@ export const changeUserRole = async (id, role, confirmationEmail) => {
   const response = await api.patch(`/api/users/${id}/role`, { role, confirmationEmail });
   return response.data;
 };
+
+export const getEmployees = async () => (await api.get('/api/users/employees')).data;
+export const setUserActive = async (id, isActive, confirmationEmail) =>
+  (await api.patch(`/api/users/${id}/active`, { isActive, confirmationEmail })).data;

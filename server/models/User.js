@@ -28,9 +28,12 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['admin', 'resident'],
-      default: 'resident',
+      enum: ['admin', 'employee', 'user', 'resident'],
+      default: 'user',
     },
+    isActive: { type: Boolean, default: true },
+    // Additive demo provisioning ownership; never accepted by account APIs.
+    demoProvisioningKey: { type: String, select: false, immutable: true },
     phone: {
       type: String,
       default: '',

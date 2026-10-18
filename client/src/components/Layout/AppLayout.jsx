@@ -14,6 +14,8 @@ import {
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { getRoleLabel, normalizeRole } from '../../utils/roles';
+import barangaySeal from '../../assets/Barangay_Logo.png';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -31,7 +33,8 @@ const AppLayout = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  const isAdmin = user?.role === 'admin';
+  const role = normalizeRole(user?.role);
+  const isAdmin = role === 'admin';
 
   const adminMenuItems = [
     {
@@ -58,17 +61,17 @@ const AppLayout = () => {
 
   const residentMenuItems = [
     {
-      key: '/resident/dashboard',
+      key: '/user/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
     },
     {
-      key: '/resident/submit-ticket',
+      key: '/user/submit-ticket',
       icon: <PlusCircleOutlined />,
       label: 'Submit Ticket',
     },
     {
-      key: '/resident/my-tickets',
+      key: '/user/my-tickets',
       icon: <FileTextOutlined />,
       label: 'My Tickets',
     },
@@ -79,7 +82,11 @@ const AppLayout = () => {
     },
   ];
 
-  const menuItems = isAdmin ? adminMenuItems : residentMenuItems;
+  const employeeMenuItems = [
+    { key: '/employee/assigned-tickets', icon: <FileTextOutlined />, label: 'Assigned Tickets' },
+    { key: '/profile', icon: <UserOutlined />, label: 'Profile' },
+  ];
+  const menuItems = isAdmin ? adminMenuItems : role === 'employee' ? employeeMenuItems : residentMenuItems;
 
   // Determine selected key based on current path
   const getSelectedKey = () => {
@@ -90,13 +97,14 @@ const AppLayout = () => {
 
     // Check for prefix matches (e.g., /admin/ticket/:id -> /admin/dashboard)
     if (path.startsWith('/admin/ticket')) return [location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard'];
-    if (path.startsWith('/resident/ticket')) return ['/resident/my-tickets'];
+    if (path.startsWith('/user/ticket')) return ['/user/my-tickets'];
+    if (path.startsWith('/employee/ticket')) return ['/employee/assigned-tickets'];
 
     return [path];
   };
 
   const selectedKey = getSelectedKey()[0];
-  const isDashboard = location.pathname === '/admin/dashboard' || location.pathname === '/resident/dashboard';
+  const isDashboard = location.pathname === '/admin/dashboard' || location.pathname === '/user/dashboard';
 
   useLayoutEffect(() => {
     const container = menuContainer.current;
@@ -112,7 +120,7 @@ const AppLayout = () => {
     const observer = new ResizeObserver(measure);
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, [selectedKey, collapsed, isAdmin]);
+  }, [selectedKey, collapsed, role]);
 
   const handleMenuClick = ({ key }) => {
     navigate(key);
@@ -142,7 +150,7 @@ const AppLayout = () => {
   const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'User';
 
   return (
-    <Layout className="app-shell" style={{ minHeight: '100vh' }}>
+    <Layout className={`app-shell role-${role}`} style={{ minHeight: '100vh' }}>
       <Sider
         id="primary-sidebar"
         collapsible
@@ -163,7 +171,9 @@ const AppLayout = () => {
         }}
       >
         <div className={`sidebar-logo ${collapsed ? 'collapsed' : ''}`}>
-          {collapsed ? (
+          {!isAdmin ? (
+            <><img className="workspace-seal" src={barangaySeal} alt="Barangay Baclaran seal" />{!collapsed && <span>BMIS<small>{role === 'employee' ? 'Staff workspace' : 'Reporting portal'}</small></span>}</>
+          ) : collapsed ? (
             <SafetyCertificateOutlined style={{ fontSize: 24, color: '#D4A017' }} />
           ) : (
             <>
@@ -199,6 +209,7 @@ const AppLayout = () => {
             <span className="header-brand">
               Barangay Baclaran Incident Reporting System
             </span>
+            {!isAdmin && <span className="workspace-role">{getRoleLabel(role)}</span>}
           </Space>
 
           <div className="header-right">

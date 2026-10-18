@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Button, Card, Descriptions, Form, Input, Modal, Spin, Tag, message } from 'antd';
+import { Avatar, Button, Card, Descriptions, Form, Input, Modal, Spin, Tag, message } from 'antd';
 import { useAuth } from '../context/AuthContext';
 import { PHONE_HELP, phoneRulesFor } from '../utils/phone';
+import { getRoleLabel } from '../utils/roles';
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
@@ -37,11 +38,12 @@ const Profile = () => {
   return (
     <>
       <h1 className="page-title">My Profile</h1>
-      <Card extra={<Button type="primary" onClick={openEditor}>Edit Profile</Button>}>
+      <Card className="profile-card" extra={<Button type="primary" onClick={openEditor}>Edit Profile</Button>}>
+        {user.role !== 'admin' && <div className="profile-summary"><Avatar size={56} style={{ background: '#0A4D68' }}>{user.firstName?.[0]}{user.lastName?.[0]}</Avatar><div><strong>{user.firstName} {user.lastName}</strong><span>{getRoleLabel(user.role)} account · Barangay Baclaran</span></div></div>}
         <Descriptions bordered column={{ xs: 1, sm: 1, md: 2 }} items={[
           { key: 'name', label: 'Name', children: `${user.firstName} ${user.lastName}` },
           { key: 'email', label: 'Email', children: user.email },
-          { key: 'role', label: 'Role', children: <Tag color={user.role === 'admin' ? 'blue' : 'green'}>{user.role}</Tag> },
+          { key: 'role', label: 'Role', children: <Tag color={user.role === 'admin' ? 'blue' : 'green'}>{getRoleLabel(user.role)}</Tag> },
           { key: 'phone', label: 'Phone', children: user.phone || 'Not provided' },
           { key: 'address', label: 'Address', children: user.address || 'Not provided', span: 2 },
         ]} />

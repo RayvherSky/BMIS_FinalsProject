@@ -2,6 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import api from '../api/axios';
+import { getHomePath, normalizeRole } from '../utils/roles';
+
+const normalizeAccount = account => {
+  const role = normalizeRole(account?.role);
+  if (!role) throw new Error('Unsupported account role');
+  return { ...account, role };
+};
 
 const AuthContext = createContext(null);
 
@@ -22,7 +29,7 @@ export const AuthProvider = ({ children }) => {
 
       try {
         const response = await api.get('/api/auth/me');
-        setUser(response.data.user || response.data);
+        setUser(normalizeAccount(response.data.user || response.data));
         setToken(storedToken);
       } catch (error) {
         console.error('Token validation failed:', error);
@@ -41,18 +48,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.post('/api/auth/login', { email, password });
       const { token: newToken, user: userData } = response.data;
-
+      const account = normalizeAccount(userData);
       localStorage.setItem('token', newToken);
       setToken(newToken);
-      setUser(userData);
+      setUser(account);
 
       message.success('Login successful!');
 
-      if (userData.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/resident/dashboard');
-      }
+      navigate(getHomePath(account.role));
 
       return { success: true };
     } catch (error) {
@@ -66,13 +69,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.post('/api/auth/register', data);
       const { token: newToken, user: userData } = response.data;
-
+      const account = normalizeAccount(userData);
       localStorage.setItem('token', newToken);
       setToken(newToken);
-      setUser(userData);
+      setUser(account);
 
       message.success('Registration successful!');
-      navigate('/resident/dashboard');
+      navigate(getHomePath(account.role));
 
       return { success: true };
     } catch (error) {
@@ -94,7 +97,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.put('/api/auth/profile', data);
       const updatedUser = response.data.user || response.data;
-      setUser(updatedUser);
+      setUser(normalizeAccount(updatedUser));
       message.success('Profile updated successfully!');
       return { success: true };
     } catch (error) {

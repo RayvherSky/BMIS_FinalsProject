@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { Spin } from 'antd';
 import { useAuth } from '../../context/AuthContext';
+import { getHomePath, normalizeRole } from '../../utils/roles';
 
 /**
  * ProtectedRoute component that guards routes based on authentication and roles.
@@ -31,12 +32,9 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user?.role)) {
-    // Redirect to the appropriate dashboard based on user role
-    if (user?.role === 'admin') {
-      return <Navigate to="/admin/dashboard" replace />;
-    }
-    return <Navigate to="/resident/dashboard" replace />;
+  const role = normalizeRole(user?.role);
+  if (!role || (allowedRoles && !allowedRoles.map(normalizeRole).includes(role))) {
+    return <Navigate to={getHomePath(role)} replace />;
   }
 
   return children ? children : <Outlet />;

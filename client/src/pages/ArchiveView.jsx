@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Input, Modal, Select, Spin, Table, Tabs, Typography, message } from 'antd';
+import { Button, Modal, Select, Spin, Table, Tabs, Typography, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge/StatusBadge';
 import { getArchivedTickets, restoreTicket } from '../api/archiveApi';
 import { CATEGORIES, formatDate } from '../utils/helpers';
+import TicketSearch from '../components/TicketSearch/TicketSearch';
+import { filterTickets } from '../utils/ticketSearch';
 
 const ArchiveView = () => {
   const navigate = useNavigate();
@@ -12,6 +14,7 @@ const ArchiveView = () => {
   const [restoring, setRestoring] = useState(null);
   const [category, setCategory] = useState();
   const [search, setSearch] = useState('');
+  const [fuzzy, setFuzzy] = useState(false);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('all');
   const mounted = useRef(false);
@@ -28,7 +31,7 @@ const ArchiveView = () => {
     setPage(1);
     const load = async () => {
       try {
-        const data = await getArchivedTickets({ category, search });
+        const data = await getArchivedTickets({ category });
         if (active) setTickets(data);
       } catch (error) {
         if (active) message.error(error.response?.data?.message || 'Unable to load archived tickets');
@@ -38,7 +41,7 @@ const ArchiveView = () => {
     };
     load();
     return () => { active = false; };
-  }, [category, search]);
+  }, [category]);
 
   const restore = (ticket) => {
     confirmation.current = Modal.confirm({
@@ -65,11 +68,12 @@ const ArchiveView = () => {
     });
   };
 
-  const visibleTickets = status === 'all' ? tickets : tickets.filter(ticket => ticket.status === status);
+  const searchedTickets = filterTickets(tickets, search, fuzzy);
+  const visibleTickets = status === 'all' ? searchedTickets : searchedTickets.filter(ticket => ticket.status === status);
   const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleTickets.length / 10)));
   const statusTabs = ['all', 'Resolved', 'Dismissed'].map(value => ({
     key: value,
-    label: `${value === 'all' ? 'All' : value} (${value === 'all' ? tickets.length : tickets.filter(ticket => ticket.status === value).length})`,
+    label: `${value === 'all' ? 'All' : value} (${value === 'all' ? searchedTickets.length : searchedTickets.filter(ticket => ticket.status === value).length})`,
   }));
 
   const columns = [
@@ -88,8 +92,9 @@ const ArchiveView = () => {
       <Tabs activeKey={status} items={statusTabs} onChange={value => { setStatus(value); setPage(1); }} />
       <div className="filter-bar">
         <Select aria-label="Category filter" placeholder="All Categories" allowClear value={category} onChange={setCategory} options={CATEGORIES.map((value) => ({ value, label: value }))} style={{ minWidth: 200 }} virtual={false} />
-        <Input.Search placeholder="Search archived tickets" allowClear onSearch={(value) => setSearch(value.trim())} style={{ maxWidth: 360 }} />
+        <TicketSearch placeholder="Search archived tickets" value={search} onChange={value => { setSearch(value); setPage(1); }} fuzzy={fuzzy} onFuzzyChange={value => { setFuzzy(value); setPage(1); }} />
       </div>
+      <Typography.Paragraph role="status" aria-live="polite">{visibleTickets.length} matching tickets</Typography.Paragraph>
       <Spin spinning={loading} tip="Loading archived tickets..."><Table rowKey="_id" columns={columns} dataSource={visibleTickets} scroll={{ x: 1000 }} pagination={{ current: currentPage, onChange: setPage, defaultPageSize: 10, showSizeChanger: false }} /></Spin>
     </>
   );

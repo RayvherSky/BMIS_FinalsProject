@@ -1,16 +1,17 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { canonicalRole, knownRole, safeUser } = require('../utils/roles');
 const { isValidOptionalPhone, PHONE_MESSAGE } = require('../utils/validatePhone');
 
 // Helper: Generate JWT token
 const generateToken = (id, role) => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, role: canonicalRole(role) }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 };
 
-// @desc    Register a new user (resident)
+// @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res) => {
@@ -36,7 +37,7 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
-    // Create user with resident role
+    // Public registration always creates a standard User
     const user = await User.create({
       firstName,
       lastName,
@@ -44,7 +45,7 @@ const register = async (req, res) => {
       password,
       phone: phone || '',
       address: address || '',
-      role: 'resident',
+      role: 'user',
     });
 
     const token = generateToken(user._id, user.role);
@@ -56,7 +57,8 @@ const register = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        role: user.role,
+        role: canonicalRole(user.role),
+        isActive: user.isActive !== false,
         phone: user.phone,
         address: user.address,
       },
@@ -79,7 +81,7 @@ const login = async (req, res) => {
 
     // Find user by email
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
+    if (!user || user.isActive === false || !knownRole(user.role)) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -98,7 +100,8 @@ const login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        role: user.role,
+        role: canonicalRole(user.role),
+        isActive: user.isActive !== false,
         phone: user.phone,
         address: user.address,
       },
@@ -118,7 +121,7 @@ const getMe = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.status(200).json(user);
+    res.status(200).json(safeUser(user));
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -161,7 +164,8 @@ const updateProfile = async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      role: user.role,
+      role: canonicalRole(user.role),
+      isActive: user.isActive !== false,
       phone: user.phone,
       address: user.address,
     });

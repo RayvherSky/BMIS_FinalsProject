@@ -1,3 +1,4 @@
+import { getHomePath } from '../utils/roles';
 import React, { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { Card, Form, Input, Button, Typography, Row, Col } from 'antd';
@@ -20,10 +21,7 @@ const Register = () => {
 
   // Redirect if already authenticated
   if (isAuthenticated && user) {
-    if (user.role === 'admin') {
-      return <Navigate to="/admin/dashboard" replace />;
-    }
-    return <Navigate to="/resident/dashboard" replace />;
+    return <Navigate to={getHomePath(user.role)} replace />;
   }
 
   const onFinish = async (values) => {

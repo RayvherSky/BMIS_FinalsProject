@@ -120,7 +120,7 @@ test('UPD-04 Others form requires a description and saves the custom category', 
   expect(response.status()).toBe(201);
   const ticket = await response.json();
   expect(ticket).toMatchObject({ category: 'Others', customCategory: 'Animal welfare' });
-  await expect(page).toHaveURL(/\/resident\/my-tickets$/);
+  await expect(page).toHaveURL(/\/user\/my-tickets$/);
   const saved = await (await request.get(`/api/tickets/${ticket._id}`, { headers: owner.headers })).json();
   expect(saved.customCategory).toBe('Animal welfare');
 });
@@ -262,6 +262,7 @@ test('AUD-05 Others reports must be selectable in category filters for both role
 
 test('UPD-08 dashboard charts show known counts and stay global when directory search changes', async ({ page, request }) => {
   const admin = await session(request);
+  await page.route(url => url.pathname === '/api/archive', route => route.fulfill({ json: [] }));
   await page.route('**/api/tickets*', route => route.fulfill({ json: new URL(route.request().url()).searchParams.get('search') ? [] : [
     { _id: 'chart-a', title: 'Uncollected waste', category: 'Sanitation', status: 'Pending', priority: 'Medium' },
     { _id: 'chart-b', title: 'Broken footpath', category: 'Infrastructure', status: 'Resolved', priority: 'High' },
@@ -283,9 +284,10 @@ test('UPD-08 dashboard charts show known counts and stay global when directory s
 
 test('UPD-09 empty analytics data shows zero totals without invalid charts', async ({ page, request }) => {
   const admin = await session(request);
+  await page.route(url => url.pathname === '/api/archive', route => route.fulfill({ json: [] }));
   await page.route('**/api/tickets*', route => route.fulfill({ json: [] }));
   await openAs(page, admin, '/admin/dashboard');
-  await expect(page.locator('.ant-statistic-content-value')).toHaveText(['0', '0', '0', '0', '0']);
+  await expect(page.locator('.ant-statistic-content-value')).toHaveText(['0', '0', '0', '0', '0', '0']);
   await expect(page.getByText('System Analytics', { exact: true })).toHaveCount(0);
   await expect(page.locator('.ant-empty-description')).toContainText('No data');
 });
@@ -350,7 +352,7 @@ test('AUD-06 registration form blocks an invalid phone and accepts the corrected
   const registered = page.waitForResponse(response => response.url().endsWith('/api/auth/register') && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Register', exact: true }).click();
   expect((await registered).status()).toBe(201);
-  await expect(page).toHaveURL(/\/resident\/dashboard$/);
+  await expect(page).toHaveURL(/\/user\/dashboard$/);
 });
 
 test('UPD-10 new analytics and note controls fit a narrow admin viewport', async ({ page, request }) => {

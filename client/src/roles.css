@@ -1,0 +1,71 @@
+.workspace-seal { width: 38px; height: 38px; object-fit: contain; flex: 0 0 auto; }
+.sidebar-logo small { display: block; font-size: 11px; font-weight: 400; letter-spacing: .03em; color: rgba(255,255,255,.7); line-height: 1.5; }
+.workspace-role { border: 1px solid #d6e5e5; border-radius: 20px; padding: 3px 10px; color: #0a4d68; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.workspace-eyebrow { display: block; color: #2d6a4f; font-size: 11px; font-weight: 700; letter-spacing: .15em; margin-bottom: 8px; }
+.role-user .page-content { background: #f2f6f5; }
+.role-user .sidebar-logo, .role-employee .sidebar-logo { display: flex; align-items: center; gap: 10px; text-align: left; line-height: 1.2; min-height: 88px; }
+.role-user .sidebar-logo.collapsed, .role-employee .sidebar-logo.collapsed { justify-content: center; }
+.user-welcome { display: grid; grid-template-columns: minmax(0,1fr) 230px; gap: 24px; border: 1px solid #d5e5df; background: #fff !important; padding: 30px !important; border-radius: 16px; color: #0a4d68 !important; }
+.user-welcome h1 { color: #0a4d68 !important; }
+.user-welcome p { color: #596c72 !important; }
+.role-user .welcome-section .ant-btn.dashboard-tickets-action { color: #0a4d68; background: #fff; border-color: #b9cec5; box-shadow: none; }
+.role-user .welcome-section .ant-btn.dashboard-tickets-action:hover { color: #0a4d68; background: #eef5f1; border-color: #2d6a4f; }
+.user-welcome-note { display: flex; flex-direction: column; justify-content: center; padding: 22px; border-radius: 12px; background: #eef5f1; color: #2d6a4f; font-size: 13px; line-height: 1.7; }
+.user-welcome-note strong { display: block; margin-bottom: 8px; font-size: 16px; }
+.role-user .stat-card { border-radius: 12px; box-shadow: none; border-color: #dce7e2; }
+.role-user .dashboard-recent { border-radius: 14px; border-color: #dce7e2; }
+.role-user .ticket-card { border-radius: 10px; box-shadow: none; }
+.user-page-intro { margin-bottom: 22px; }
+.user-page-intro p { color: #647579; }
+.user-list-controls { padding: 18px; border: 1px solid #dce7e2; border-radius: 12px; background: #fff; margin-bottom: 18px; }
+.user-list-controls .filter-bar { margin-bottom: 0; padding: 0; box-shadow: none; }
+.user-report-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-bottom: 24px; }
+.user-report-card { min-width: 0; border: 1px solid #dce7e2; border-radius: 14px; box-shadow: none; }
+.user-report-card .ant-card-body { padding: 22px; }
+.user-report-card h2 { margin: 10px 0 14px; font-size: 18px; }
+.user-report-card h2 .ant-btn { padding: 0; height: auto; text-align: left; white-space: normal; font-size: inherit; font-weight: 650; }
+.user-report-card .report-metadata { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #647579; font-size: 12px; margin-top: 14px; }
+.user-report-reference { font-size: 11px; letter-spacing: .06em; color: #647579; }
+.user-list-pagination { display: flex; justify-content: flex-end; }
+.role-user .detail-card, .role-user .profile-card, .role-user .report-form-card { border-radius: 16px; border-color: #dce7e2; max-width: 1100px; margin: 0 auto; }
+.role-user .detail-card .ant-descriptions-view { border-radius: 10px; }
+.role-user .detail-card .ant-list-item { border-left: 3px solid #d6e5dd; }
+.role-user .detail-card .ant-list-item-meta-title { font-size: 13px; }
+.role-user .report-form-card .ant-card-body { padding: 30px; }
+.profile-summary { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #e5ece8; }
+.profile-summary strong { display: block; color: #0a4d68; font-size: 20px; }
+.profile-summary span { color: #647579; }
+.role-employee .page-content { background: #f3f5f7; }
+.workspace-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.workspace-heading .page-title { margin-bottom: 6px; }
+.workspace-heading p { margin: 0; color: #647579; }
+.employee-workspace { max-width: 1500px; margin: 0 auto; }
+.employee-queue-panel { background: #fff; border: 1px solid #dae2e7; border-radius: 10px; padding: 20px; border-top: 4px solid #0a4d68; }
+.employee-filters .ant-input-search { max-width: 420px; min-width: 180px; }
+.employee-filters .ant-select { min-width: 180px; }
+.employee-queue-caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin: 18px 0; font-size: 12px; }
+.assignment-title { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 220px; max-width: 350px; }
+.assignment-title small { color: #71808a; font-size: 10px; letter-spacing: .06em; }
+.assignment-title .ant-btn { padding: 0; height: auto; white-space: normal; text-align: left; }
+.assignment-title .ant-typography { font-size: 12px; }
+.role-employee .detail-card { border-radius: 10px; border-top: 4px solid #0a4d68; }
+.assignment-panel { margin: 24px 0; border: 1px solid #dce7e2; border-radius: 8px; padding: 18px; background: #f7faf8; }
+.assignment-panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.assignment-history { margin-top: 16px; border-top: 1px solid #dce7e2; padding-top: 12px; }
+.assignment-history ol { margin: 0; padding-left: 20px; }
+.assignment-history li { padding: 7px 0; font-size: 12px; color: #53676c; }
+.communication-label { font-size: 11px; letter-spacing: .04em; color: #647579; }
+.detail-refresh { margin-left: 12px; }
+@media (max-width: 900px) { .user-welcome { grid-template-columns: minmax(0,1fr); } .user-welcome-note { display: none; } .user-report-list { grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 575px) {
+  .role-user .header-brand, .role-employee .header-brand { display: none; }
+  .user-welcome { padding: 20px !important; }
+  .user-list-controls, .employee-queue-panel { padding: 12px; }
+  .user-list-controls .filter-bar > * { min-width: 0 !important; width: 100%; max-width: 100%; }
+  .user-report-card .ant-card-body, .role-user .report-form-card .ant-card-body { padding: 18px; }
+  .employee-filters > *, .employee-filters .ant-input-search { width: 100%; min-width: 0; max-width: 100%; }
+  .workspace-heading > .ant-btn { width: 100%; }
+  .workspace-heading p { font-size: 13px; }
+  .profile-summary { flex-wrap: wrap; }
+  .detail-refresh { margin-left: 0; }
+}

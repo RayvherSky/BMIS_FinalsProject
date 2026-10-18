@@ -9,6 +9,7 @@ async function main() {
   const env = {
     ...process.env,
     MONGODB_URI: database.getUri('bmis_acceptance'),
+    BMIS_DEMO_CREDENTIALS_PATH: path.join(database.instanceInfo.dbPath, 'demo-accounts.json'),
     JWT_SECRET: 'bmis-isolated-acceptance-tests',
     PORT: '5001',
   };

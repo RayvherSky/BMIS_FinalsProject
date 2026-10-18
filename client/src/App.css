@@ -540,6 +540,7 @@ body {
 .dashboard-page .stats-row > .ant-col:nth-child(3) { animation-delay: 0.08s; }
 .dashboard-page .stats-row > .ant-col:nth-child(4) { animation-delay: 0.12s; }
 .dashboard-page .stats-row > .ant-col:nth-child(5) { animation-delay: 0.16s; }
+.dashboard-page .stats-row > .ant-col:nth-child(6) { animation-delay: 0.2s; }
 
 .dashboard-page .stat-card {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -689,6 +690,22 @@ body {
 }
 
 /* Detail Page */
+.ticket-search {
+  flex: 1 1 280px;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.ticket-search-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.stat-card[role="button"] { cursor: pointer; }
+.stat-card[role="button"]:focus-visible { outline: 3px solid #d4a017; outline-offset: 3px; }
+
 .detail-card {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -760,6 +777,8 @@ body {
 }
 
 @media (max-width: 768px) {
+  .ticket-search { flex: auto; width: 100%; max-width: none; }
+
   .auth-card .ant-card-body {
     padding: 24px 16px;
   }

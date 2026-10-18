@@ -48,3 +48,8 @@ export const addTicketNote = async (id, text, isPrivate = false) => {
   const response = await api.post(`/api/tickets/${id}/notes`, { text, isPrivate });
   return response.data;
 };
+
+export const assignTicket = async (id, assignedTo) => {
+  const response = await api.patch(`/api/tickets/${id}/assign`, { assignedTo });
+  return response.data;
+};

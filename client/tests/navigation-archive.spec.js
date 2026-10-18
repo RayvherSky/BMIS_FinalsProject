@@ -24,7 +24,7 @@ test('NAV sidebar stays mounted and collapsed while its active highlight follows
   const shell = await page.locator('#primary-sidebar').elementHandle();
   await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
   await page.getByRole('menuitem', { name: /My Tickets$/ }).click();
-  await expect(page).toHaveURL(/\/resident\/my-tickets$/);
+  await expect(page).toHaveURL(/\/user\/my-tickets$/);
   await expect(page.getByRole('button', { name: 'Expand sidebar', exact: true })).toBeVisible();
   expect(await shell.evaluate(node => node.isConnected)).toBe(true);
   const selected = page.locator('.sidebar-navigation .ant-menu-item-selected');
@@ -41,18 +41,18 @@ test('NAV prominent resident actions navigate correctly at a narrow viewport', a
   await page.setViewportSize({ width: 375, height: 812 });
   await mockSession(page);
   await page.goto('/resident/dashboard');
-  for (const name of ['Report New Incident', 'View all tickets']) {
-    const action = page.getByRole('button', { name, exact: true });
+  for (const name of [/Report New Incident$/, /View all tickets$/]) {
+    const action = page.getByRole('button', { name });
     await expect(action).toBeVisible();
     await expect.poll(async () => (await action.boundingBox()).x).toBeGreaterThanOrEqual(0);
     await expect.poll(async () => { const box = await action.boundingBox(); return box.x + box.width; }).toBeLessThanOrEqual(375);
     expect((await action.boundingBox()).height).toBeGreaterThanOrEqual(44);
   }
-  await page.getByRole('button', { name: 'Report New Incident', exact: true }).click();
-  await expect(page).toHaveURL(/\/resident\/submit-ticket$/);
+  await page.getByRole('button', { name: /Report New Incident$/ }).click();
+  await expect(page).toHaveURL(/\/user\/submit-ticket$/);
   await page.goBack();
-  await page.getByRole('button', { name: 'View all tickets', exact: true }).click();
-  await expect(page).toHaveURL(/\/resident\/my-tickets$/);
+  await page.getByRole('button', { name: /View all tickets$/ }).click();
+  await expect(page).toHaveURL(/\/user\/my-tickets$/);
 });
 
 test('NAV reduced-motion preference disables dashboard and sidebar motion', async ({ page }) => {
@@ -70,7 +70,7 @@ test('NAV dashboard enters from the right edge without horizontal page overflow'
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await mockSession(page);
   await page.goto('/resident/dashboard');
-  await expect(page.getByRole('button', { name: 'Report New Incident', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Report New Incident$/ })).toBeVisible();
   const initial = await page.locator('.dashboard-page').evaluate(node => {
     const animation = node.getAnimations().find(item => item.effect.target === node);
     if (!animation) throw new Error('Dashboard entry animation did not start');
@@ -127,7 +127,7 @@ test('NAV newly resolved reports auto-archive and status tabs combine with categ
   await page.getByRole('tab', { name: 'All (2)', exact: true }).click();
   await page.getByRole('button', { name: reports[0].title, exact: true }).click();
   await expect(page.locator('.sidebar-navigation .ant-menu-item-selected')).toContainText('Archive');
-  await page.getByRole('button', { name: 'Back to tickets', exact: true }).click();
+  await page.getByRole('button', { name: /Back to tickets$/ }).click();
   await expect(page).toHaveURL(/\/admin\/archive$/);
 });
 
@@ -153,7 +153,7 @@ test(`NAV Archive back navigation survives a ${phase} detail request`, async ({ 
     await requested;
     if (phase === 'failed') await expect(page.getByText('Detail service unavailable', { exact: true })).toBeVisible();
     await expect(page.locator('.sidebar-navigation .ant-menu-item-selected')).toContainText('Archive');
-    await page.getByRole('button', { name: 'Back to tickets', exact: true }).click();
+    await page.getByRole('button', { name: /Back to tickets$/ }).click();
     await expect(page).toHaveURL(/\/admin\/archive$/);
     await expect(page.getByRole('button', { name: ticket.title, exact: true })).toBeVisible();
   } finally { release(); }

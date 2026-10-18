@@ -1,30 +1,10 @@
 const Ticket = require("../models/Ticket");
 const escapeSearch = require("../utils/escapeSearch");
 
-// Sanitize a ticket for resident-facing responses:
-// - Strip private notes.
-// - Redact linked tickets: own → { _id, title }, foreign → { _id }.
-// Accepts a Mongoose document or plain object; always returns a plain object.
-function sanitizeForResident(ticketDocOrObj, userId) {
-  const obj =
-    typeof ticketDocOrObj.toObject === "function"
-      ? ticketDocOrObj.toObject()
-      : ticketDocOrObj;
-  obj.notes = (obj.notes || []).filter((n) => !n.isPrivate);
-  if (obj.linkedTicket && typeof obj.linkedTicket === "object" && obj.linkedTicket._id) {
-    const linkedOwner = obj.linkedTicket.submittedBy;
-    const ownLink =
-      linkedOwner &&
-      (typeof linkedOwner === "object"
-        ? linkedOwner._id || linkedOwner
-        : linkedOwner
-      ).toString() === userId;
-    obj.linkedTicket = ownLink
-      ? { _id: obj.linkedTicket._id, title: obj.linkedTicket.title }
-      : { _id: obj.linkedTicket._id };
-  }
-  return obj;
-}
+const User = require('../models/User');
+const { canonicalRole } = require('../utils/roles');
+const { populateTicket, serializeTicket, canRead } = require('../utils/ticketAccess');
+const { withAccountLock } = require('../utils/accountLock');
 
 // @desc    Create a new ticket
 // @route   POST /api/tickets
@@ -68,7 +48,7 @@ const createTicket = async (req, res) => {
       "firstName lastName email",
     );
 
-    res.status(201).json(populatedTicket);
+    res.status(201).json(serializeTicket(populatedTicket, { ...req.user, role: 'user' }));
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -80,10 +60,15 @@ const createTicket = async (req, res) => {
 const getAllTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
-    if (search !== undefined && typeof search !== "string") {
+    if ([category, status, priority, search].some(value => value !== undefined && typeof value !== 'string')) {
       return res.status(400).json({ message: "Search must be text" });
     }
+    const actor = req.user || { role: 'admin' };
     const filter = { isArchived: false };
+    if (canonicalRole(actor.role) === 'employee') {
+      filter.assignedTo = actor.id;
+      filter.isArchived = { $ne: true };
+    }
 
     if (category) filter.category = category;
     if (status) filter.status = status;
@@ -93,13 +78,13 @@ const getAllTickets = async (req, res) => {
         { title: { $regex: escapeSearch(search), $options: "i" } },
         { description: { $regex: escapeSearch(search), $options: "i" } },
       ];
+      if (canonicalRole(actor.role) === 'employee' && /^[a-f\d]{24}$/i.test(search)) {
+        filter.$or.push({ _id: search });
+      }
     }
 
-    const tickets = await Ticket.find(filter)
-      .populate("submittedBy", "firstName lastName email")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json(tickets);
+    const tickets = await populateTicket(Ticket.find(filter), actor.role).sort({ createdAt: -1 });
+    res.status(200).json(tickets.map(ticket => serializeTicket(ticket, actor)));
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -111,7 +96,7 @@ const getAllTickets = async (req, res) => {
 const getMyTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
-    if (search !== undefined && typeof search !== "string") {
+    if ([category, status, priority, search].some(value => value !== undefined && typeof value !== 'string')) {
       return res.status(400).json({ message: "Search must be text" });
     }
     const filter = { submittedBy: req.user.id, isArchived: false };
@@ -126,11 +111,9 @@ const getMyTickets = async (req, res) => {
       ];
     }
 
-    const tickets = await Ticket.find(filter)
-      .populate("submittedBy", "firstName lastName email")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json(tickets.map((t) => sanitizeForResident(t, req.user.id)));
+    const actor = { ...req.user, role: req.user.role || 'user' };
+    const tickets = await populateTicket(Ticket.find(filter), actor.role).sort({ createdAt: -1 });
+    res.status(200).json(tickets.map(ticket => serializeTicket(ticket, actor)));
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -141,35 +124,12 @@ const getMyTickets = async (req, res) => {
 // @access  Private
 const getTicketById = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id)
-      .populate("submittedBy", "firstName lastName email")
-      .populate("notes.addedBy", "firstName lastName role")
-      .populate({
-        path: "linkedTicket",
-        select:
-          req.user.role === "resident" ? "_id title submittedBy" : undefined,
-      });
-
+    const ticket = await populateTicket(Ticket.findById(req.params.id), req.user.role);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
-
-    if (
-      req.user.role === "resident" &&
-      ticket.submittedBy._id.toString() !== req.user.id
-    ) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to view this ticket" });
-    }
-
-    // Sanitize private notes and linked-ticket visibility for residents
-    if (req.user.role === "resident") {
-      return res.status(200).json(sanitizeForResident(ticket, req.user.id));
-    }
-
-    res.status(200).json(ticket);
+    if (!canRead(ticket, req.user)) return res.status(403).json({ message: "Not authorized to view this ticket" });
+    res.status(200).json(serializeTicket(ticket, req.user));
   } catch (error) {
-    if (error.kind === "ObjectId")
-      return res.status(404).json({ message: "Ticket not found" });
+    if (error.kind === "ObjectId") return res.status(404).json({ message: "Ticket not found" });
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -216,12 +176,9 @@ const updateTicketStatus = async (req, res) => {
 
     await ticket.save();
 
-    const updatedTicket = await Ticket.findById(ticket._id)
-      .populate("submittedBy", "firstName lastName email")
-      .populate("notes.addedBy", "firstName lastName role")
-      .populate("linkedTicket");
+    const updatedTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
 
-    res.status(200).json(updatedTicket);
+    res.status(200).json(serializeTicket(updatedTicket, req.user));
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
@@ -255,12 +212,9 @@ const updateTicketPriority = async (req, res) => {
     ticket.priority = priority;
     await ticket.save();
 
-    const updatedTicket = await Ticket.findById(ticket._id)
-      .populate("submittedBy", "firstName lastName email")
-      .populate("notes.addedBy", "firstName lastName role")
-      .populate("linkedTicket");
+    const updatedTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
 
-    res.status(200).json(updatedTicket);
+    res.status(200).json(serializeTicket(updatedTicket, req.user));
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
@@ -290,15 +244,16 @@ const linkTicket = async (req, res) => {
         .json({ message: "Cannot link a ticket to itself" });
     }
 
+    if ([ticket, targetTicket].some(item => item.status === "Resolved" || item.isArchived)) {
+      return res.status(400).json({ message: "Resolved or archived tickets cannot be linked" });
+    }
+
     ticket.linkedTicket = linkedTicketId;
     await ticket.save();
 
-    const updatedTicket = await Ticket.findById(ticket._id)
-      .populate("submittedBy", "firstName lastName email")
-      .populate("notes.addedBy", "firstName lastName role")
-      .populate("linkedTicket");
+    const updatedTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
 
-    res.status(200).json(updatedTicket);
+    res.status(200).json(serializeTicket(updatedTicket, req.user));
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
@@ -317,12 +272,9 @@ const unlinkTicket = async (req, res) => {
     ticket.linkedTicket = null;
     await ticket.save();
 
-    const updatedTicket = await Ticket.findById(ticket._id)
-      .populate("submittedBy", "firstName lastName email")
-      .populate("notes.addedBy", "firstName lastName role")
-      .populate("linkedTicket");
+    const updatedTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
 
-    res.status(200).json(updatedTicket);
+    res.status(200).json(serializeTicket(updatedTicket, req.user));
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
@@ -336,47 +288,40 @@ const unlinkTicket = async (req, res) => {
 const addTicketNote = async (req, res) => {
   try {
     const { text, isPrivate } = req.body;
-    if (!text)
-      return res.status(400).json({ message: "Note text is required" });
-
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
-
-    if (
-      req.user.role === "resident" &&
-      ticket.submittedBy.toString() !== req.user.id
-    ) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to modify this ticket" });
-    }
-
-    const noteIsPrivate =
-      req.user.role === "admin" ? Boolean(isPrivate) : false;
-
-    ticket.notes.push({
-      text,
-      addedBy: req.user.id,
-      isPrivate: noteIsPrivate,
-    });
-
-    await ticket.save();
-
-    const updatedTicket = await Ticket.findById(ticket._id)
-      .populate("submittedBy", "firstName lastName email")
-      .populate("notes.addedBy", "firstName lastName role")
-      .populate("linkedTicket");
-
-    res
-      .status(200)
-      .json(
-        req.user.role === "resident"
-          ? sanitizeForResident(updatedTicket, req.user.id)
-          : updatedTicket,
-      );
+    if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ message: "Note text is required" });
+    const actor = { ...req.user, role: canonicalRole(req.user.role) };
+    if (!['admin', 'employee', 'user'].includes(actor.role)) return res.status(403).json({ message: 'Not authorized' });
+    const work = async () => {
+      if (actor.role === 'employee') {
+        // Recheck account eligibility after obtaining the transition lock. An old
+        // protected request must not bypass a completed demotion/deactivation.
+        const account = await User.findById(actor.id).select('role isActive');
+        if (!account || account.role !== 'employee' || account.isActive === false) return res.status(403).json({ message: 'Employee access is no longer available' });
+      }
+      const ticket = await Ticket.findById(req.params.id);
+      if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+      if (!canRead(ticket, actor)) return res.status(403).json({ message: "Not authorized to modify this ticket" });
+      const privateNote = actor.role !== 'user' && Boolean(isPrivate);
+      const note = { text: text.trim(), addedBy: actor.id, isPrivate: privateNote, authorRole: actor.role,
+        kind: privateNote ? 'internal' : actor.role === 'user' ? 'reply' : 'update' };
+      if (actor.role === 'employee') {
+        // Assignment and archival state are mandatory predicates of the write.
+        const updated = await Ticket.findOneAndUpdate(
+          { _id: ticket._id, assignedTo: actor.id, isArchived: { $ne: true } },
+          { $push: { notes: note } }, { new: true, runValidators: true });
+        if (!updated) return res.status(403).json({ message: 'Assignment changed; refresh your queue' });
+      } else {
+        ticket.notes.push(note);
+        await ticket.save();
+      }
+      const updatedTicket = await populateTicket(Ticket.findById(ticket._id), actor.role);
+      if (!updatedTicket || !canRead(updatedTicket, actor)) return res.status(403).json({ message: 'Assignment changed; refresh your queue' });
+      res.status(200).json(serializeTicket(updatedTicket, actor));
+    };
+    if (actor.role === 'employee') await withAccountLock(actor.id, work);
+    else await work();
   } catch (error) {
-    if (error.kind === "ObjectId")
-      return res.status(404).json({ message: "Ticket not found" });
+    if (error.kind === "ObjectId") return res.status(404).json({ message: "Ticket not found" });
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

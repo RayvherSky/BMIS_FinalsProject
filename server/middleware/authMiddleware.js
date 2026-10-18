@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { canonicalRole, knownRole } = require('../utils/roles');
 
 const protect = async (req, res, next) => {
   let decoded;
@@ -19,9 +20,11 @@ const protect = async (req, res, next) => {
 
   try {
     // User management changes must apply to existing sessions immediately.
-    const user = await User.findById(decoded.id).select('_id role');
+    const user = await User.findById(decoded.id).select('_id role isActive');
     if (!user) return res.status(401).json({ message: 'Not authorized, user no longer exists' });
-    req.user = { id: user._id.toString(), role: user.role };
+    if (user.isActive === false) return res.status(401).json({ message: 'This account is inactive' });
+    if (!knownRole(user.role)) return res.status(403).json({ message: 'Account role is not authorized' });
+    req.user = { id: user._id.toString(), role: canonicalRole(user.role) };
     next();
   } catch (error) {
     next(error);

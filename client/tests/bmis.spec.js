@@ -30,7 +30,7 @@ async function login(page, email = RESIDENT, password = PASSWORD) {
   await page.getByPlaceholder('Email Address', { exact: true }).fill(email);
   await page.getByPlaceholder('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Login', exact: true }).click();
-  await expect(page).toHaveURL(email === ADMIN ? /\/admin\/dashboard$/ : /\/resident\/dashboard$/);
+  await expect(page).toHaveURL(email === ADMIN ? /\/admin\/dashboard$/ : /\/user\/dashboard$/);
 }
 
 async function choose(page, label, value) {
@@ -53,13 +53,17 @@ async function createIncident(request, headers, title, overrides = {}) {
   return response.json();
 }
 
-test('demo data has ten realistic users and at least twenty completed tickets', async ({ request }) => {
+test('demo data includes all fifteen Admin/Employee/User accounts and at least twenty completed tickets', async ({ request }) => {
   const headers = await authenticate(request);
   const users = await (await request.get('/api/users', { headers })).json();
-  expect(users).toHaveLength(10);
-  expect(users.filter((user) => user.role === 'admin')).toHaveLength(2);
-  expect(users.filter((user) => user.role === 'resident')).toHaveLength(8);
-  expect(users.every((user) => user.firstName && user.lastName && user.email && user.address)).toBeTruthy();
+  expect(users).toHaveLength(15);
+  expect(users.filter((user) => user.role === 'admin')).toHaveLength(3);
+  expect(users.filter((user) => user.role === 'employee')).toHaveLength(2);
+  expect(users.filter((user) => user.role === 'user')).toHaveLength(10);
+  const originalUsers = users.filter(user => !user.email.endsWith('@bmis.test'));
+  expect(originalUsers).toHaveLength(10);
+  expect(originalUsers.every((user) => user.firstName && user.lastName && user.email && user.address)).toBeTruthy();
+  expect(users.every(user => user.firstName && user.lastName && user.email)).toBeTruthy();
   const tickets = await (await request.get('/api/tickets', { headers })).json();
   expect(tickets.filter((ticket) => ['Resolved', 'Dismissed'].includes(ticket.status)).length).toBeGreaterThanOrEqual(20);
 });
@@ -88,7 +92,7 @@ test('resident dashboard shows its own totals and at most five recent tickets', 
   await expect(page.locator('.stat-card').filter({ hasText: 'Total Tickets' }).locator('.ant-statistic-content-value')).toHaveText(String(tickets.length));
   await expect(page.locator('.ticket-card')).toHaveCount(Math.min(5, tickets.length));
   await page.getByRole('button', { name: 'Report New Incident' }).click();
-  await expect(page).toHaveURL(/\/resident\/submit-ticket$/);
+  await expect(page).toHaveURL(/\/user\/submit-ticket$/);
 });
 
 test('resident submits evidence and admin processes, archives and restores the ticket', async ({ page, request }) => {
@@ -114,7 +118,7 @@ test('resident submits evidence and admin processes, archives and restores the t
   uploadedFiles.add(path.join(uploadDirectory, path.basename(ticket.image)));
   expect(ticket.priority).toBe('Medium');
   expect(ticket.image).toMatch(/^\/uploads\//);
-  await expect(page).toHaveURL(/\/resident\/my-tickets$/);
+  await expect(page).toHaveURL(/\/user\/my-tickets$/);
   await page.getByText(title, { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start Processing' })).toHaveCount(0);
   await expect.poll(() => page.locator('.detail-image').evaluate((image) => image.complete && image.naturalWidth > 0)).toBeTruthy();
@@ -164,7 +168,7 @@ test('ticket filters work and admin totals stay independent of search', async ({
   await page.goto('/resident/my-tickets');
   await choose(page, 'Category filter', 'Sanitation');
   await choose(page, 'Status filter', 'Resolved');
-  const rows = page.locator('.ant-table-tbody tr.ant-table-row');
+  const rows = page.locator('.user-report-card');
   await expect(rows.first()).toBeVisible();
   for (const row of await rows.all()) {
     await expect(row).toContainText('Sanitation');
@@ -172,7 +176,7 @@ test('ticket filters work and admin totals stay independent of search', async ({
   }
   await page.getByPlaceholder('Search tickets').fill('no-matching-incident-xyz');
   await page.getByPlaceholder('Search tickets').press('Enter');
-  await expect(page.locator('.ant-empty-description').getByText('No data', { exact: true })).toBeVisible();
+  await expect(page.locator('.ant-empty-description').getByText('No matching tickets', { exact: true })).toBeVisible();
   await page.evaluate(() => localStorage.clear());
   await login(page, ADMIN);
   const headers = await authenticate(request);
@@ -231,7 +235,7 @@ test('admin edits contact details separately from a confirmed role change', asyn
   await dialog.getByRole('button', { name: 'Save Changes' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(row).toContainText('09209998877');
-  await expect(row).toContainText('resident');
+  await expect(row).toContainText('User');
   await row.getByRole('button', { name: 'Change Role', exact: true }).click();
   const confirm = page.getByRole('button', { name: 'Confirm Role Change', exact: true });
   await expect(confirm).toBeDisabled();
@@ -241,18 +245,18 @@ test('admin edits contact details separately from a confirmed role change', asyn
   await page.getByLabel('Confirm account email', { exact: true }).fill(pedro.email);
   await expect(confirm).toBeEnabled();
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(row).toContainText('resident');
+  await expect(row).toContainText('User');
   await row.getByRole('button', { name: 'Change Role', exact: true }).click();
   await expect(page.getByLabel('Confirm account email', { exact: true })).toHaveValue('');
   await choose(page, 'New Role', 'Admin');
   await page.getByLabel('Confirm account email', { exact: true }).fill(pedro.email);
   await confirm.click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(row).toContainText('admin');
+  await expect(row).toContainText('Admin');
   await page.reload();
   await page.getByPlaceholder('Search users by name or email').fill(pedro.email);
   await page.getByPlaceholder('Search users by name or email').press('Enter');
-  await expect(row).toContainText('admin');
+  await expect(row).toContainText('Admin');
   await expect(row).toContainText('09209998877');
   } finally {
     expect((await request.patch(`/api/users/${pedro._id}/role`, { headers, data: { role: 'resident', confirmationEmail: pedro.email } })).status()).toBe(200);
@@ -265,7 +269,7 @@ test('role routes and ticket ownership are enforced and missing tickets are hand
   await expect(page).toHaveURL(/\/login$/);
   await login(page);
   await page.goto('/admin/users');
-  await expect(page).toHaveURL(/\/resident\/dashboard$/);
+  await expect(page).toHaveURL(/\/user\/dashboard$/);
   const adminHeaders = await authenticate(request);
   const residentHeaders = await authenticate(request, RESIDENT);
   expect((await request.get('/api/users', { headers: residentHeaders })).status()).toBe(403);
@@ -350,7 +354,7 @@ test('dismissed tickets archive and restore with timestamps and status intact', 
   expect(restored.isArchived).toBe(false);
 });
 
-test('registration creates a resident and logout removes access', async ({ page }) => {
+test('registration creates a User and logout removes access', async ({ page }) => {
   await page.goto('/register');
   await page.getByPlaceholder('First Name', { exact: true }).fill('Luz');
   await page.getByPlaceholder('Last Name', { exact: true }).fill('Mendoza');
@@ -358,7 +362,7 @@ test('registration creates a resident and logout removes access', async ({ page 
   await page.getByPlaceholder('Password', { exact: true }).fill(PASSWORD);
   await page.getByPlaceholder('Confirm Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Register', exact: true }).click();
-  await expect(page).toHaveURL(/\/resident\/dashboard$/);
+  await expect(page).toHaveURL(/\/user\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Welcome, Luz!' })).toBeVisible();
   await expect(page.getByText('No tickets yet')).toBeVisible();
   await page.locator('.header-right').click();
