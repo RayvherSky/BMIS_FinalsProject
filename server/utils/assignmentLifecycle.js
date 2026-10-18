@@ -7,6 +7,7 @@ async function clearAssignments(employeeId, changedBy, reason) {
     { assignedTo: employeeId, isArchived: { $ne: true } },
     {
       $set: { assignedTo: null, assignedAt: null },
+      $inc: { workflowVersion: 1 },
       $push: { assignmentHistory: { previousEmployee: employeeId, newEmployee: null, changedBy, createdAt: new Date(), action: 'unassigned', reason } },
     },
   );

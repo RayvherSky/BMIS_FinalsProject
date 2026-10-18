@@ -3,6 +3,7 @@ const Ticket = require('../models/Ticket');
 const User = require('../models/User');
 const { withAccountLock, withTicketLock } = require('../utils/accountLock');
 const { populateTicket, serializeTicket, idOf } = require('../utils/ticketAccess');
+const { statusEvent } = require('../utils/ticketLifecycle');
 
 const assignTicket = async (req, res) => {
   try {
@@ -28,7 +29,9 @@ const assignTicket = async (req, res) => {
         const updated = await Ticket.findOneAndUpdate(
           { _id: ticket._id, assignedTo: previousEmployee, isArchived: { $ne: true }, status: ticket.status },
           { $set: { assignedTo, assignedAt: assignedTo ? now : null, ...(assignedTo && ticket.status === 'Pending' ? { status: 'In Progress' } : {}) },
-            $push: { assignmentHistory: { previousEmployee, newEmployee: assignedTo, changedBy: req.user.id, createdAt: now, action: !assignedTo ? 'unassigned' : previousEmployee ? 'reassigned' : 'assigned' } } },
+            $inc: { workflowVersion: 1 },
+            $push: { assignmentHistory: { previousEmployee, newEmployee: assignedTo, changedBy: req.user.id, createdAt: now, action: !assignedTo ? 'unassigned' : previousEmployee ? 'reassigned' : 'assigned' },
+              ...(assignedTo && ticket.status === 'Pending' ? { statusHistory: statusEvent(ticket, 'In Progress', req.user, 'assignment', '', now) } : {}) } },
           { new: true, runValidators: true },
         );
         if (!updated) return res.status(409).json({ message: 'Ticket changed; refresh and retry assignment' });

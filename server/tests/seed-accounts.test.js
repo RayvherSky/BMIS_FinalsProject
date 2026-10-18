@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { createTestDatabase } = require('./helpers/testDatabase');
 const userSchema = require('../models/User').schema;
 
 const expectedAccounts = [
@@ -16,7 +16,7 @@ const expectedAccounts = [
 ];
 let database, connection, users, tickets, credentialsPath;
 before(async () => {
-  database = await MongoMemoryServer.create({ binary: { version: '8.2.6' } });
+  database = await createTestDatabase('bmis_seed_accounts');
   credentialsPath = path.join(database.instanceInfo.dbPath, 'seed-test-credentials.json');
   connection = await mongoose.createConnection(database.getUri('bmis_seed_accounts')).asPromise();
   users = connection.model('User', userSchema);
@@ -32,15 +32,20 @@ async function runSeed() {
   const windows = process.platform === 'win32';
   const command = windows ? process.env.ComSpec || 'cmd.exe' : 'npm';
   const args = windows ? ['/d', '/s', '/c', 'npm run seed'] : ['run', 'seed'];
-  const child = spawn(command, args, { cwd: path.resolve(__dirname, '..'), windowsHide: true,
-    env: { ...process.env, MONGODB_URI: database.getUri('bmis_seed_accounts'), BMIS_DEMO_CREDENTIALS_PATH: credentialsPath },
-    stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '', stderr = '';
-  child.stdout.on('data', data => { stdout += data; });
-  child.stderr.on('data', data => { stderr += data; });
-  const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
-  assert.equal(code, 0, `Seed failed: ${stderr}`);
-  return stdout;
+  const outputPath = path.join(database.instanceInfo.dbPath, 'seed-output.log');
+  const output = await fs.open(outputPath, 'w');
+  try {
+    const child = spawn(command, args, { cwd: path.resolve(__dirname, '..'), windowsHide: true,
+      env: { ...process.env, MONGODB_URI: database.getUri('bmis_seed_accounts'), BMIS_DEMO_CREDENTIALS_PATH: credentialsPath },
+      stdio: ['ignore', output.fd, output.fd] });
+    const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+    const stdout = await fs.readFile(outputPath, 'utf8');
+    assert.equal(code, 0, `Seed failed: ${stdout}`);
+    return stdout;
+  } finally {
+    await output.close();
+    await fs.rm(outputPath, { force: true });
+  }
 }
 
 test('npm run seed creates all 15 accounts and prints usable credentials grouped by role', async () => {

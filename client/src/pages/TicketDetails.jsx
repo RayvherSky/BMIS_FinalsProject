@@ -10,6 +10,10 @@ import { archiveTicket } from '../api/archiveApi';
 import { formatDate, getPriorityColor, PRIORITIES } from '../utils/helpers';
 import { getRoleLabel, getTicketBasePath, normalizeRole } from '../utils/roles';
 import AssignmentPanel from '../components/AssignmentPanel/AssignmentPanel';
+import TicketRequests from '../components/TicketRequests/TicketRequests';
+import RequestHistory from '../components/TicketRequests/RequestHistory';
+import ReversalPanel from '../components/TicketRequests/ReversalPanel';
+import { requestErrorMessage } from '../utils/ticketRequests';
 
 const TicketDetails = () => {
   const { id } = useParams();
@@ -24,7 +28,7 @@ const TicketDetails = () => {
   const base = getTicketBasePath(role);
   
   const [ticket, setTicket] = useState(null);
-  const backPath = isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : isEmployee ? '/employee/assigned-tickets' : '/user/my-tickets';
+  const backPath = isStaff && location.state?.fromActionCenter ? `${base}/action-center` : isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : isEmployee ? '/employee/assigned-tickets' : `/user/my-tickets${location.state?.fromArchivedDismissed ? '?archived=dismissed' : ''}`;
   const [otherTickets, setOtherTickets] = useState([]);
   const [selectedDuplicates, setSelectedDuplicates] = useState([]); 
   const [loading, setLoading] = useState(true);
@@ -35,9 +39,10 @@ const TicketDetails = () => {
   const [isPrivateNote, setIsPrivateNote] = useState(false); // ADDED: state for checkbox
   const [submittingNote, setSubmittingNote] = useState(false);
   
-  const view = useMemo(() => ({ id }), [id, role]);
+  const view = useMemo(() => ({ id }), [id, role, user._id]);
   const currentView = useRef(view);
   const accessVersion = useRef(0);
+  const renderedAccessVersion = accessVersion.current;
   const confirmation = useRef(null);
   currentView.current = view;
 
@@ -87,8 +92,8 @@ const TicketDetails = () => {
 
   const handleAccessError = err => {
     if (currentView.current !== view) return;
-    const explanation = err.response?.data?.message || 'Unable to load ticket';
-    if (isEmployee && [403, 404].includes(err.response?.status)) {
+    const explanation = requestErrorMessage(err, 'Unable to load ticket');
+    if ([403, 404].includes(err.response?.status)) {
       accessVersion.current += 1;
       setTicket(null);
       setNoteText('');
@@ -325,13 +330,16 @@ const TicketDetails = () => {
   return (
     <>
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ marginBottom: 20 }}>Back to tickets</Button>
-      {isEmployee && <Button className="detail-refresh" onClick={refreshTicket} disabled={working || loading}>Refresh details</Button>}
+      <Button className="detail-refresh" onClick={refreshTicket} disabled={working || loading}>Refresh details</Button>
       <Spin spinning={loading} tip="Loading ticket...">
         {error ? <Result status="warning" title={error} /> : ticket && (
           <Card className="detail-card" title={<h1 style={{ fontSize: 22, color: '#0A4D68', margin: 0 }}>Ticket Details</h1>}>
             <Descriptions bordered layout={screens.sm ? 'horizontal' : 'vertical'} column={{ xs: 1, sm: 1, md: 2 }} items={items} />
-            {isAdmin && <AssignmentPanel ticket={ticket} disabled={working} onUpdate={updated => { if (currentView.current === view) setTicket(updated); }} />}
+            {isAdmin && <AssignmentPanel ticket={ticket} disabled={working} onUpdate={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
             {imageUrl && <div style={{ marginTop: 24 }}><Typography.Title level={5}>Evidence Photo</Typography.Title><Image className="detail-image" src={imageUrl} alt={`Evidence for ${ticket.title}`} style={{ maxHeight: 400, objectFit: 'contain' }} /></div>}
+            {isAdmin && <ReversalPanel key={`reversal-${id}`} ticket={ticket} disabled={working || submittingNote} onAccessError={handleAccessError} onUpdate={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
+            {!isStaff && <TicketRequests key={`requests-${id}`} ticket={ticket} disabled={working || submittingNote} onAccessError={handleAccessError} onUpdate={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
+            {isStaff && !!ticket.requests?.length && <div className="ticket-request-panel"><Link to={`${base}/action-center`}>Handle requests in Action Center</Link><RequestHistory requests={ticket.requests} /></div>}
             
             <Divider orientation="left" style={{ marginTop: 32 }}>Updates & Notes</Divider>
             <List

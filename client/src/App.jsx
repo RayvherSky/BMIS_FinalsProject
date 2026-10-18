@@ -7,6 +7,7 @@ import SplashScreen from './components/SplashScreen/SplashScreen';
 import AppLayout from './components/Layout/AppLayout';
 import LegacyUserRedirect from './components/ProtectedRoute/LegacyUserRedirect';
 import EmployeeQueue from './pages/EmployeeQueue';
+import ActionCenter from './pages/ActionCenter';
 import './roles.css';
 
 import Login from './pages/Login';
@@ -88,11 +89,13 @@ function App() {
                 </Route>
                 <Route element={<ProtectedRoute allowedRoles={['employee']} />}>
                   <Route path="/employee/assigned-tickets" element={<EmployeeQueue />} />
+                  <Route path="/employee/action-center" element={<ActionCenter />} />
                   <Route path="/employee/ticket/:id" element={<TicketDetails />} />
                 </Route>
                 {/* Protected: admin role */}
                 <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
                   <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                  <Route path="/admin/action-center" element={<ActionCenter />} />
                   <Route path="/admin/ticket/:id" element={<TicketDetails />} />
                   <Route path="/admin/users" element={<UserManagement />} />
                   <Route path="/admin/archive" element={<ArchiveView />} />

@@ -1,10 +1,10 @@
 // Acceptance tests always use a fresh, temporary MongoDB, never server/.env's database.
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { createTestDatabase } = require('../tests/helpers/testDatabase');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 
 async function main() {
-  const database = await MongoMemoryServer.create({ binary: { version: '8.2.6' } });
+  const database = await createTestDatabase('bmis_acceptance');
   const cwd = path.join(__dirname, '..');
   const env = {
     ...process.env,

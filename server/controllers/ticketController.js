@@ -4,7 +4,9 @@ const escapeSearch = require("../utils/escapeSearch");
 const User = require('../models/User');
 const { canonicalRole } = require('../utils/roles');
 const { populateTicket, serializeTicket, canRead } = require('../utils/ticketAccess');
-const { withAccountLock } = require('../utils/accountLock');
+const { withAccountLock, withTicketLock } = require('../utils/accountLock');
+const { problem, textInput, predicate, statusEvent, currentActor, sendProblem } = require('../utils/ticketLifecycle');
+const { reserve, checkNote } = require('../utils/communicationLimits');
 
 // @desc    Create a new ticket
 // @route   POST /api/tickets
@@ -100,6 +102,12 @@ const getMyTickets = async (req, res) => {
       return res.status(400).json({ message: "Search must be text" });
     }
     const filter = { submittedBy: req.user.id, isArchived: false };
+    if (req.query.archived !== undefined) {
+      if (req.query.archived !== 'dismissed') return res.status(400).json({ message: 'Invalid archive filter' });
+      filter.isArchived = true;
+      filter.status = 'Dismissed';
+      if (status && status !== 'Dismissed') return res.status(400).json({ message: 'This view contains archived Dismissed reports only' });
+    }
 
     if (category) filter.category = category;
     if (status) filter.status = status;
@@ -155,34 +163,31 @@ const updateTicketStatus = async (req, res) => {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    const previousStatus = ticket.status;
-    ticket.status = status;
-
-    if (status === "Resolved") {
-      const completedAt = new Date();
-      if (previousStatus !== "Resolved" || !ticket.resolvedAt) ticket.resolvedAt = completedAt;
-      ticket.dismissedAt = null;
-      if (!ticket.isArchived || !ticket.archivedAt) ticket.archivedAt = completedAt;
-      ticket.isArchived = true;
-    } else if (status === "Dismissed") {
-      ticket.dismissedAt = Date.now();
-      ticket.resolvedAt = null;
-    } else {
-      if (previousStatus === "Resolved" || previousStatus === "Dismissed") {
-        ticket.resolvedAt = null;
-        ticket.dismissedAt = null;
+    await withAccountLock(req.user.id, () => withTicketLock(req.params.id, async () => {
+      await currentActor(req.user);
+      const current = await Ticket.findById(req.params.id);
+      if (!current) throw problem(404, 'Ticket not found');
+      const previousStatus = current.status;
+      if (status !== previousStatus && (status === 'Pending' || ['Resolved', 'Dismissed'].includes(previousStatus))) {
+        throw problem(409, 'Use Revert Status with a reason to reopen or move this ticket backward.');
       }
-    }
-
-    await ticket.save();
-
-    const updatedTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
-
-    res.status(200).json(serializeTicket(updatedTicket, req.user));
+      const now = new Date();
+      const update = { $set: { status }, $inc: { workflowVersion: 1 } };
+      if (status !== previousStatus) update.$push = { statusHistory: statusEvent(current, status, req.user, 'status', '', now) };
+      if (status === 'Resolved') Object.assign(update.$set, {
+        resolvedAt: previousStatus === 'Resolved' && current.resolvedAt ? current.resolvedAt : now,
+        dismissedAt: null, isArchived: true, archivedAt: current.isArchived && current.archivedAt ? current.archivedAt : now,
+      });
+      else if (status === 'Dismissed') Object.assign(update.$set, { dismissedAt: previousStatus === 'Dismissed' && current.dismissedAt ? current.dismissedAt : now, resolvedAt: null });
+      const updated = await Ticket.findOneAndUpdate(predicate(current), update, { new: true, runValidators: true });
+      if (!updated) throw problem(409, 'Ticket changed. Refresh and retry the status change.');
+      const result = await populateTicket(Ticket.findById(current._id), 'admin');
+      res.status(200).json(serializeTicket(result, req.user));
+    }));
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
-    res.status(500).json({ message: "Server error", error: error.message });
+    sendProblem(res, error);
   }
 };
 
@@ -289,40 +294,34 @@ const addTicketNote = async (req, res) => {
   try {
     const { text, isPrivate } = req.body;
     if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ message: "Note text is required" });
+    const content = textInput(text, 'Note');
     const actor = { ...req.user, role: canonicalRole(req.user.role) };
     if (!['admin', 'employee', 'user'].includes(actor.role)) return res.status(403).json({ message: 'Not authorized' });
-    const work = async () => {
-      if (actor.role === 'employee') {
-        // Recheck account eligibility after obtaining the transition lock. An old
-        // protected request must not bypass a completed demotion/deactivation.
-        const account = await User.findById(actor.id).select('role isActive');
-        if (!account || account.role !== 'employee' || account.isActive === false) return res.status(403).json({ message: 'Employee access is no longer available' });
-      }
+    const work = () => withTicketLock(req.params.id, async () => {
+      await currentActor(actor);
       const ticket = await Ticket.findById(req.params.id);
       if (!ticket) return res.status(404).json({ message: "Ticket not found" });
       if (!canRead(ticket, actor)) return res.status(403).json({ message: "Not authorized to modify this ticket" });
       const privateNote = actor.role !== 'user' && Boolean(isPrivate);
-      const note = { text: text.trim(), addedBy: actor.id, isPrivate: privateNote, authorRole: actor.role,
+      const now = new Date();
+      checkNote(ticket, actor, content, privateNote, now);
+      const note = { text: content, addedBy: actor.id, isPrivate: privateNote, authorRole: actor.role, createdAt: now,
         kind: privateNote ? 'internal' : actor.role === 'user' ? 'reply' : 'update' };
-      if (actor.role === 'employee') {
-        // Assignment and archival state are mandatory predicates of the write.
+      const extra = actor.role === 'employee' ? { assignedTo: actor.id, isArchived: { $ne: true } } : actor.role === 'user' ? { submittedBy: actor.id } : {};
+      const release = await reserve(actor, now);
+      try {
         const updated = await Ticket.findOneAndUpdate(
-          { _id: ticket._id, assignedTo: actor.id, isArchived: { $ne: true } },
-          { $push: { notes: note } }, { new: true, runValidators: true });
-        if (!updated) return res.status(403).json({ message: 'Assignment changed; refresh your queue' });
-      } else {
-        ticket.notes.push(note);
-        await ticket.save();
-      }
+          predicate(ticket, extra), { $push: { notes: note }, $inc: { workflowVersion: 1 } }, { new: true, runValidators: true });
+        if (!updated) throw problem(actor.role === 'employee' ? 403 : 409, 'Ticket access or content changed; refresh and retry.');
+      } catch (error) { await release(); throw error; }
       const updatedTicket = await populateTicket(Ticket.findById(ticket._id), actor.role);
       if (!updatedTicket || !canRead(updatedTicket, actor)) return res.status(403).json({ message: 'Assignment changed; refresh your queue' });
       res.status(200).json(serializeTicket(updatedTicket, actor));
-    };
-    if (actor.role === 'employee') await withAccountLock(actor.id, work);
-    else await work();
+    });
+    await withAccountLock(actor.id, work);
   } catch (error) {
     if (error.kind === "ObjectId") return res.status(404).json({ message: "Ticket not found" });
-    res.status(500).json({ message: "Server error", error: error.message });
+    sendProblem(res, error);
   }
 };
 

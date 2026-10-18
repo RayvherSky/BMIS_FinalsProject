@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { historySchema, requestSchema } = require('./ticketWorkflowSchemas');
 
 const ticketSchema = new mongoose.Schema(
   {
@@ -34,6 +35,9 @@ const ticketSchema = new mongoose.Schema(
       enum: ["Pending", "In Progress", "Resolved", "Dismissed"],
       default: "Pending",
     },
+    workflowVersion: { type: Number, default: 0 },
+    statusHistory: [historySchema],
+    requests: [requestSchema],
     priority: {
       type: String,
       enum: ["Low", "Medium", "High", "Urgent"],

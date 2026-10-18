@@ -6,6 +6,7 @@ import {
   FileTextOutlined,
   TeamOutlined,
   InboxOutlined,
+  BellOutlined,
   UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -41,6 +42,11 @@ const AppLayout = () => {
       key: '/admin/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
+    },
+    {
+      key: '/admin/action-center',
+      icon: <BellOutlined />,
+      label: 'Action Center',
     },
     {
       key: '/admin/users',
@@ -84,6 +90,7 @@ const AppLayout = () => {
 
   const employeeMenuItems = [
     { key: '/employee/assigned-tickets', icon: <FileTextOutlined />, label: 'Assigned Tickets' },
+    { key: '/employee/action-center', icon: <BellOutlined />, label: 'Action Center' },
     { key: '/profile', icon: <UserOutlined />, label: 'Profile' },
   ];
   const menuItems = isAdmin ? adminMenuItems : role === 'employee' ? employeeMenuItems : residentMenuItems;
@@ -94,6 +101,7 @@ const AppLayout = () => {
     // Check for exact matches first
     const exactMatch = menuItems.find((item) => item.key === path);
     if (exactMatch) return [exactMatch.key];
+    if (location.state?.fromActionCenter && (isAdmin || role === 'employee')) return [`/${role}/action-center`];
 
     // Check for prefix matches (e.g., /admin/ticket/:id -> /admin/dashboard)
     if (path.startsWith('/admin/ticket')) return [location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard'];

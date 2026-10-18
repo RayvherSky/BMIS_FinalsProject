@@ -25,7 +25,10 @@ The optional `BMIS_DEMO_CREDENTIALS_PATH` override lets isolated seed runs use t
 - After implementation, both CLI tests passed. Every printed dispatch password matched its real bcrypt-backed account; reseeding preserved saved passwords and restored the specified active role set without duplicating tickets.
 - All **72 existing backend checks** passed, zero failures or skips.
 - Syntax checks passed for the seed, temporary test launcher and new tests.
-- Complete browser verification against the expanded seed is in progress; final result will be recorded before delivery.
+- Complete browser verification against the expanded seed passed **71/71**, with **zero failures, skips, flaky cases or runner errors**, in **359.99 seconds**. Evidence: `client/test-results/reseed-accounts.json`.
+- Test ports **5001/3001** were released and no acceptance-test uploaded photos remained. The normal credentials file still has its original modification time, before these tests.
+
+The final result is **74 passing backend/seed checks** (72 existing + two new) and **71 passing browser scenarios**. No frontend application source or dependencies changed, and the normal database was not reseeded. There are no pending implementation or verification steps for this follow-up.
 
 ## Use
 

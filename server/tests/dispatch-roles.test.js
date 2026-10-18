@@ -4,7 +4,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { createTestDatabase } = require('./helpers/testDatabase');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 
@@ -12,7 +12,7 @@ let database, server, base, accounts;
 const password = 'IsolatedPassword123!';
 before(async () => {
   process.env.JWT_SECRET = 'isolated-dispatch-role-tests';
-  database = await MongoMemoryServer.create({ binary: { version: '8.2.6' } });
+  database = await createTestDatabase('dispatch_role_tests');
   await mongoose.connect(database.getUri('dispatch_role_tests'));
   const app = express();
   app.use(express.json());
