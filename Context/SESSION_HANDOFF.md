@@ -1,69 +1,92 @@
-﻿# BMIS session handoff
+# BMIS session handoff
 
-Saved **18 October 2026, 21:26 Asia/Manila**. Workspace: `C:\PROJECTS\BMIS`; Windows/PowerShell.
+Saved **18 October 2026, 21:32 Asia/Manila**. Workspace: `C:\PROJECTS\BMIS`; Windows/PowerShell.
 
-## Exact stopping point
+## Start here
 
-**All nine audit repair patches, the four login/role/priority notes, and six dashboard/navigation/archive notes are implemented. Full browser/build acceptance remains blocked.** No implementation is currently in progress. Do not repeat the audit or reimplement completed work.
+**All nine audit patches and all ten subsequently supplied feature notes are implemented. Full browser/build acceptance is still pending.** Do not repeat the audit, rebuild completed pages, or reimplement these changes.
 
-The latest request was to implement six more notes and test them, asking only for missing context. All three product questions were answered (see below). Work is complete at the code/focused-check level. Latest report/manual guide: `docs/changes/2026-10-18-navigation-archive.md`; evidence: `docs/changes/2026-10-18-navigation-archive-verification.json`. Previous four-note report: `docs/changes/2026-10-18-requested-notes.md`.
+The latest user request was to refresh this handoff and remove redundant Markdown files from Context before starting a fresh chat. That documentation cleanup is complete. No feature implementation is in progress. Continue with the user's next instruction; the remaining verification task is below.
 
-The user has more notes but asked to focus on the supplied sets. Do not ask for additional notes. Next action is runtime acceptance where Node child processes are permitted. This session gets `spawn EPERM`; approval escalation is unavailable. Do not repeat blocked commands without an environment change, weaken tests, or alter application/build behavior to bypass it.
+This file is the current entry point. Read [PROJECT_STATUS.md](PROJECT_STATUS.md) selectively for implementation history; older audit/build results there are historical snapshots. Detailed reports and executable tests remain in the repository.
 
-## Latest six notes and confirmed decisions
+## Product and working preferences
 
-1. Dashboard animation on both roles: content enters from the **right edge and moves left into place** (explicit user answer), with staggered statistic cards and subtle hover motion. New dashboard/sidebar/width motion respects reduced motion.
-2. Resident Report New Incident and View all tickets are large, prominent actions together in the welcome panel, stacking at narrow widths. Removed the old small recent-card link.
-3. Removed the bottom sidebar collapse trigger; the accessible header Collapse/Expand button remains.
-4. Authenticated routes now share a persistent `AppLayout` parent with Outlet; removed redundant wrappers from eight pages. Role/auth guards remain. This lets collapsed state and the measured, animated menu highlight survive navigation.
-5. **Newly resolving a ticket auto-archives immediately; Dismissed stays manual; existing records remain unchanged** (explicit user answer). Same save records resolution/archive flags and dates. Optional `archivedAt` stamps manual/automatic archiving. Repeated resolution preserves dates; restore clears archive state/date and preserves status/completion time. Restored Resolved stays active until another explicit resolve/archive. No background hook, scheduler, or migration.
-6. Archive **All / Resolved / Dismissed tabs plus incident category filter** (explicit user answer), with counts/search, custom Others labels, archive dates (legacy updatedAt fallback), and derived pagination after restore. Archive-origin details keep Archive highlighted and Back returns there even before loading or on failure. Restore modal cleanup suppresses stale UI after unmount.
+- Localhost non-emergency incident helpdesk for **Barangay Baclaran, Parañaque City**, currently branded **BMIS**. Residents submit and follow their own reports; admins manage reports, users, priority, notes, and archives. Emergency dispatch, payments, and clearances are outside the product scope.
+- React 18, Vite, Ant Design, Express, Mongoose/MongoDB, JWT, and local image uploads. Preserve the existing theme, assets, authentication, ownership controls, and role guards.
+- The user prefers requested changes handled carefully, one at a time, with relevant testing and a report explaining how to test. Check whether a note is already implemented before changing it. Ask only for material missing product decisions; all decisions for the completed work below are settled.
+- Other backlog ideas remain in root [update.md](../update.md). Do not start them unless the user requests them.
 
-Production paths: `client/src/App.jsx`, `components/Layout/AppLayout.jsx`, `App.css`, the eight authenticated page wrappers, `ResidentDashboard.jsx`, `ArchiveView.jsx`, `TicketDetails.jsx`; `server/controllers/ticketController.js`, `archiveController.js`, `models/Ticket.js`.
+## Completed work to preserve
 
-Tests: seven additional `NAV-archive` HTTP cases in `server/tests/notes-changes.test.js`; eight browser cases in new `client/tests/navigation-archive.spec.js`; intentional lifecycle expectation updates in `bmis.spec.js` and `updated-features.spec.js`. Root `update.md` marks all six implemented with browser verification pending. Review corrected Archive-origin Back before detail fetch and a query-sensitive archive fixture; no important findings remain. Actual browser motion/geometry is unverified.
+**Audit repairs AUD-01 through AUD-09:** resident list/detail/note responses strip private notes and redact foreign linked reports; link/unlink refreshes guard route identity after every await; all four searchable APIs treat input as literal text and reject non-text queries; Others submissions require a trimmed nonblank label and shared filters include Others exactly once; optional phone validation covers API/forms; detail content wraps/stacks at narrow widths; legacy duplicate-link browser scenarios use the current batch contract. Full acceptance of these patches is pending, not claimed green.
 
-## Previous four notes — preserve
+**Four login/role/priority notes:**
 
-1. **Login seal:** moved the real barangay logo from the left photo panel to the upper-right login form header, on desktop/mobile. Refined branding spacing, seal border/shadow, and input/button corners. Existing photo/layout/animation retained; no new splash docking animation.
-2. **Separate role changes:** User Management Edit contains contact fields only. A distinct Change Role action requires a different role plus the target email and shows a permission warning. Cancel saves nothing; reopening resets confirmation; errors preserve input for retry. New admin-only `PATCH /api/users/:id/role` takes `{ role, confirmationEmail }`. General contact `PUT /api/users/:id` rejects any role field before edits. Existing self-role changes remain deliberate and reload the current account; no last-admin policy was added.
-3. **Admin priority control:** already existed in TicketDetails and the protected PATCH route; preserved and verified through focused HTTP checks, not rewritten.
-4. **Admin-only priority:** closed the remaining initial-assignment gap. Resident submissions now always create Medium priority even if the body supplies another value; SubmitTicket no longer offers a priority selector and explains admin assessment. Existing stored priorities are not migrated.
+1. The real seal sits at the upper right of the login form header on desktop/mobile, with refined styling. Existing photo/splash remain; a splash docking animation was not added.
+2. Contact Edit cannot change roles. Separate Change Role UI/API requires a different valid role and typed target-account email, with a permission warning, cancellation, reset on reopening, and retry after errors. Admin-only `PATCH /api/users/:id/role` accepts `{ role, confirmationEmail }`; contact `PUT /api/users/:id` rejects any role field before changes. Existing deliberate self-role changes remain; no last-admin restriction was added.
+3. Admin priority selector/confirmation and the protected PATCH already existed; preserved and checked.
+4. Resident submissions always start at **Medium**, ignoring a forged client priority. The resident priority selector is removed. Only admins assign/change priority. Stored priorities were not migrated.
 
-Latest production paths: `client/src/pages/Login.jsx`, `UserManagement.jsx`, `SubmitTicket.jsx`; `client/src/App.css`; `client/src/api/userApi.js`; `server/controllers/userController.js`, `ticketController.js`; `server/routes/userRoutes.js`.
+**Six dashboard/navigation/archive notes:**
 
-Latest tests: new `server/tests/notes-changes.test.js` and `client/tests/requested-notes.spec.js`; updated relevant role/contact/session scenarios in `client/tests/bmis.spec.js`; updated the intentional priority expectation in `server/tests/audit-repairs.test.js`. Root `update.md` marks these notes implemented; unrelated backlog entries preserved.
+1. Both dashboards enter from the **right edge and move left into place**, with staggered statistic cards and subtle hover motion. New dashboard/sidebar/width motion respects reduced motion.
+2. Large **Report New Incident** and **View all tickets** actions appear together in the resident welcome panel and stack at narrow widths.
+3. The bottom sidebar arrow is removed. The accessible header Collapse/Expand toggle remains.
+4. A persistent authenticated `AppLayout` parent route renders an `Outlet`; individual page wrappers were removed. Collapse state survives navigation and a measured selection indicator moves between entries. Existing auth/role guards remain.
+5. Newly setting **Resolved immediately auto-archives** in the same save. **Dismissed remains manual; existing records remain unchanged.** Optional `archivedAt` stamps automatic/manual archiving; repeated resolution preserves dates. Restore clears archive state/date while preserving status and completion time. A restored Resolved ticket stays active until another explicit resolve/archive action. There is no scheduler or migration.
+6. Archive has **All / Resolved / Dismissed** tabs/counts alongside category/search, custom Others labels, and pagination clamped after restore. Archive date uses `archivedAt`, with `updatedAt` as a legacy fallback. Archive-origin detail links retain Archive selection and Back destination, including loading/failure. New resolutions leave active admin/resident lists and dashboard totals; authorized detail access remains.
 
-## Exact current verification
+## Explicit user decisions
 
-From root:
+- Optional Philippine mobile only: `09XXXXXXXXX` or `+639XXXXXXXXX`; spaces/hyphens allowed; blank allowed. Validate replacements, but preserve unchanged legacy contacts by omitting them from edit payloads. No contact migration.
+- Dashboard direction is right-edge entrance moving left, as stated above.
+- Immediate auto-archive applies to new resolutions, Dismissed stays manual, and older records must not be moved automatically.
+- Archive status tabs coexist with the incident-category filter.
+- Duplicate links remain **many children to one master**, with one `linkedTicket` ObjectId per child. Selection alone does not save: Link Selected sends child-to-master writes. A foreign linked report exposes only `{ _id }` to residents; an owned link may also expose its title. Admin visibility remains intact.
+
+## Verification and exact next task
+
+Last application verification, before this documentation cleanup:
+
+| Check | Result |
+|---|---|
+| Focused repair/HTTP checks | **41 passed, 0 failed/skipped**: 25 audit checks, nine role/priority HTTP checks, seven archive HTTP checks |
+| Browser discovery | **56 cases in five files**; original cases retained, no exclusions or expected failures |
+| Relevant JavaScript/JSX, CSS, whitespace | Passed |
+| Independent review | Findings corrected; no remaining important findings |
+| Scoped/full Playwright | **Blocked before execution: `spawn EPERM`**, starting the temporary API |
+| Production build | **Blocked: `spawn EPERM`**, starting esbuild while loading Vite config |
+
+The focused HTTP cases run actual Express routes/authentication/role middleware/controllers on an ephemeral loopback server with **database execution/writes and JWT verification supplied by isolated fixtures**. They do not establish live MongoDB/JWT integration. No browser tests ran in the repair/feature continuation, and no successful post-change production build is established. Rendered logo/mobile layout, animations, navigation, and live persistence still need acceptance. The original audit's earlier passing build and mixed browser results are historical evidence only.
+
+Next, where child processes are permitted, run these existing gates without repeating the audit:
 
 ```powershell
+# From C:\PROJECTS\BMIS
 node --test --test-isolation=none server/tests/audit-repairs.test.js server/tests/notes-changes.test.js
+Set-Location client
+Remove-Item Env:BMIS_FRONTEND_ONLY -ErrorAction SilentlyContinue
+npm test
+npm run build
 ```
 
-- **41 passed, 0 failed/skipped**: 25 prior focused checks plus 16 real HTTP checks (nine role/priority and seven archive lifecycle). HTTP cases execute Express routes, authentication/role middleware, and controllers on an ephemeral loopback server with database/JWT fixtures. No live MongoDB/JWT integration or normal database access. The seven archive cases first reproduced six failures/one passing guard, then passed after implementation.
-- Prior 25 check breakdown: AUD-03 12, AUD-04 3, AUD-06 10. Frontend form validators and real controller/query construction/model validation execute with database execution/signing stubbed.
-- `cd client; node node_modules/@playwright/test/cli.js test --list` — **56 browser cases in five files**; original 37 retained and 19 added over the audit baseline. No exclusions or expected failures.
-- Relevant JavaScript/JSX and App.css parse; Git whitespace checks pass. Independent focused review verified its two latest corrections and found no remaining important defects.
-- Focused Playwright and `npm test` — **blocked**, exit 1, `Error: spawn EPERM` before starting the temporary API. No browser tests executed in this session.
-- `npm run build` — **blocked**, exit 1, `spawn EPERM` starting esbuild while loading Vite config. No successful post-change production build established.
-- Login/mobile visuals, dashboard/sidebar animation and geometry, browser interactions, and live MongoDB persistence still need acceptance verification. Both reports contain manual checks.
+Use focused cases if fresh execution reveals a concrete failure. Do not repeatedly retry the same process-start block without an environment change, bypass the restriction by altering app/build behavior, weaken assertions, or claim full success before all browser cases and the build actually pass. Application tests were not rerun for the documentation-only cleanup.
 
-## Previous audit repairs — preserve
+## Reports and targeted code locations
 
-AUD-01/AUD-02 private-note and linked-report sanitization were completed by the prior agent and preserved. This agent implemented AUD-07 route guards after both link/unlink refresh awaits; AUD-03 literal search/type validation; AUD-04 custom-label creation validation without breaking old report saves; AUD-05 shared Others choices with one submission option; AUD-06 optional phone validation; AUD-08 responsive detail stacking/wrapping; AUD-09 legacy duplicate-link test updates.
+- Latest report/manual guide: [dashboard/navigation/archive](../docs/changes/2026-10-18-navigation-archive.md); [compact evidence](../docs/changes/2026-10-18-navigation-archive-verification.json).
+- Previous report/manual guide: [login/roles/priority](../docs/changes/2026-10-18-requested-notes.md); [stage evidence](../docs/changes/2026-10-18-notes-verification.json), a historical 34-check/48-case snapshot.
+- Audit-repair evidence: [results.json](../docs/repairs/2026-10-18/results.json), a historical 25-check/46-case snapshot. Original audit: [report](../docs/system-audit-2026-10-18.md) and [evidence](../docs/audits/2026-10-18/results.json). Read only when needed for a specific failure.
+- Navigation/motion: `client/src/App.jsx`, `components/Layout/AppLayout.jsx`, `App.css`, `pages/ResidentDashboard.jsx`, `ArchiveView.jsx`, `TicketDetails.jsx`.
+- Roles/priority/validation: relevant handlers in `server/controllers/userController.js`, `ticketController.js`, `authController.js`; `server/routes/userRoutes.js`; corresponding pages and phone helpers.
+- Archive lifecycle: `server/controllers/ticketController.js`, `archiveController.js`, `models/Ticket.js`.
+- Focused tests: `server/tests/audit-repairs.test.js`, `notes-changes.test.js`. Browser cases: `client/tests/bmis.spec.js`, `frontend-contract.spec.js`, `updated-features.spec.js`, `requested-notes.spec.js`, `navigation-archive.spec.js`.
 
-AUD-06 policy was explicitly confirmed by the user: Philippine mobile only, `09XXXXXXXXX` or `+639XXXXXXXXX`, spaces/hyphens allowed, blank optional. UI/API validate new supplied contacts. Edit forms preserve unchanged legacy contacts by omitting them from payloads. Do not migrate existing contacts.
+## Data, Git, and remaining scope
 
-Previous compact evidence: `docs/repairs/2026-10-18/results.json` (25/46 stage snapshot), `docs/changes/2026-10-18-notes-verification.json` (34/48 stage snapshot); original audit: `docs/system-audit-2026-10-18.md`, `docs/audits/2026-10-18/results.json`. Their counts are historical. The old audit aggregated 17/19 original and 9/18 new cases from separate runs; do not report those as current results.
-
-## Safety / Git / remaining scope
-
-- Normal database and user uploads untouched. No seeds, resets, drops, migrations, dependency installations, or commits.
-- HEAD remains **61f6a0b**. Preserve pre-existing deleted root `BMIS_Context.md` (content under Context), modified `server/package-lock.json`, untracked Context/audit files/root `update.md`, all prior repair patches, and current notes changes. Do not reset/clean.
-- Playwright manages its own temporary MongoDB/API/frontend on **5001/3001** using installed Chrome. Never point it at the normal database. Normal ports are **27017/5000/3000**; do not assume liveness or kill unrelated processes.
-- Existing notes are root `update.md`; `Context/update.md` is empty. All ten later notes are covered; other notes remain for later user selection.
-- Linking is many children to one master with one linkedTicket ObjectId per child; selection alone does not save; Link Selected sends child-to-master writes.
-- System naming, favicon, splash docking animation, notifications, companion/simple mode, and resident list custom labels remain separate backlog work. The requested dashboard/sidebar navigation changes are implemented. Branding remains BMIS; the user's selected replacement name is not present in this checkout.
-- Do not claim the system green until all **56** browser cases and the build actually pass.
+- Normal database/uploads were untouched during the repairs, features, and cleanup. No seeds, resets, drops, migrations, dependency installs, or commits. `npm run seed` replaces records; do not run it against normal data.
+- Playwright owns temporary MongoDB/API/frontend on **5001/3001**, using installed Chrome. Normal MongoDB/API/frontend use **27017/5000/3000**. Do not assume services are running, run parallel harnesses on the same ports, reuse the normal database for tests, or kill unrelated services.
+- HEAD remains **61f6a0b**. Source changes and reports are uncommitted. Preserve all edits, including the pre-existing `server/package-lock.json` change and root context-file deletion. The six Context Markdown deletions were explicitly authorized by the user. Do not reset/clean or recreate removed legacy prompts.
+- Context now contains only this handoff, [PROJECT_STATUS.md](PROJECT_STATUS.md), and [the original requirements PDF](CTSYSINL-PROJECT-OVERVIEW.pdf). Removed as superseded/empty: `agentprompt.md`, `BMIS_Context.md`, `BUGFIX_AGENT_PROMPT.md`, `BUGFIX_PLAYBOOK.md`, `ui-polish-prompt.md`, and the duplicate `update.md`. Current entry links were repaired; audit/change reports remain intact.
+- Unrequested backlog: system naming/favicon, historical splash docking, notifications, companion/simple mode, and resident list/card custom-category labels. Branding remains BMIS; the user's chosen replacement name is not available in this checkout.
