@@ -1,11 +1,37 @@
 const Ticket = require("../models/Ticket");
+const escapeSearch = require("../utils/escapeSearch");
+
+// Sanitize a ticket for resident-facing responses:
+// - Strip private notes.
+// - Redact linked tickets: own → { _id, title }, foreign → { _id }.
+// Accepts a Mongoose document or plain object; always returns a plain object.
+function sanitizeForResident(ticketDocOrObj, userId) {
+  const obj =
+    typeof ticketDocOrObj.toObject === "function"
+      ? ticketDocOrObj.toObject()
+      : ticketDocOrObj;
+  obj.notes = (obj.notes || []).filter((n) => !n.isPrivate);
+  if (obj.linkedTicket && typeof obj.linkedTicket === "object" && obj.linkedTicket._id) {
+    const linkedOwner = obj.linkedTicket.submittedBy;
+    const ownLink =
+      linkedOwner &&
+      (typeof linkedOwner === "object"
+        ? linkedOwner._id || linkedOwner
+        : linkedOwner
+      ).toString() === userId;
+    obj.linkedTicket = ownLink
+      ? { _id: obj.linkedTicket._id, title: obj.linkedTicket.title }
+      : { _id: obj.linkedTicket._id };
+  }
+  return obj;
+}
 
 // @desc    Create a new ticket
 // @route   POST /api/tickets
 // @access  Private (Resident)
 const createTicket = async (req, res) => {
   try {
-    const { title, description, category, customCategory, priority, location } =
+    const { title, description, category, customCategory, location } =
       req.body;
 
     if (!title || !description || !category || !location) {
@@ -16,12 +42,17 @@ const createTicket = async (req, res) => {
         });
     }
 
+    if (category === "Others" && (typeof customCategory !== "string" || !customCategory.trim())) {
+      return res.status(400).json({ message: "Please specify your custom category" });
+    }
+
     const ticketData = {
       title,
       description,
       category,
-      customCategory: category === "Others" ? customCategory : "",
-      priority: priority || "Medium",
+      customCategory: category === "Others" ? customCategory.trim() : "",
+      // Residents report the situation; admins assess and change its priority.
+      priority: "Medium",
       location,
       submittedBy: req.user.id,
     };
@@ -49,6 +80,9 @@ const createTicket = async (req, res) => {
 const getAllTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
+    if (search !== undefined && typeof search !== "string") {
+      return res.status(400).json({ message: "Search must be text" });
+    }
     const filter = { isArchived: false };
 
     if (category) filter.category = category;
@@ -56,8 +90,8 @@ const getAllTickets = async (req, res) => {
     if (priority) filter.priority = priority;
     if (search) {
       filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
+        { title: { $regex: escapeSearch(search), $options: "i" } },
+        { description: { $regex: escapeSearch(search), $options: "i" } },
       ];
     }
 
@@ -77,6 +111,9 @@ const getAllTickets = async (req, res) => {
 const getMyTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
+    if (search !== undefined && typeof search !== "string") {
+      return res.status(400).json({ message: "Search must be text" });
+    }
     const filter = { submittedBy: req.user.id, isArchived: false };
 
     if (category) filter.category = category;
@@ -84,8 +121,8 @@ const getMyTickets = async (req, res) => {
     if (priority) filter.priority = priority;
     if (search) {
       filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
+        { title: { $regex: escapeSearch(search), $options: "i" } },
+        { description: { $regex: escapeSearch(search), $options: "i" } },
       ];
     }
 
@@ -93,7 +130,7 @@ const getMyTickets = async (req, res) => {
       .populate("submittedBy", "firstName lastName email")
       .sort({ createdAt: -1 });
 
-    res.status(200).json(tickets);
+    res.status(200).json(tickets.map((t) => sanitizeForResident(t, req.user.id)));
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -124,20 +161,9 @@ const getTicketById = async (req, res) => {
         .json({ message: "Not authorized to view this ticket" });
     }
 
-    let result = ticket.toObject();
-
-    // Filter out private notes for residents and handle duplicate linking security
+    // Sanitize private notes and linked-ticket visibility for residents
     if (req.user.role === "resident") {
-      result.notes = result.notes.filter((note) => !note.isPrivate);
-
-      if (result.linkedTicket) {
-        const ownLinkedTicket =
-          ticket.linkedTicket.submittedBy.toString() === req.user.id;
-        result.linkedTicket = ownLinkedTicket
-          ? { _id: ticket.linkedTicket._id, title: ticket.linkedTicket.title }
-          : { _id: ticket.linkedTicket._id };
-      }
-      return res.status(200).json(result);
+      return res.status(200).json(sanitizeForResident(ticket, req.user.id));
     }
 
     res.status(200).json(ticket);
@@ -173,8 +199,11 @@ const updateTicketStatus = async (req, res) => {
     ticket.status = status;
 
     if (status === "Resolved") {
-      ticket.resolvedAt = Date.now();
+      const completedAt = new Date();
+      if (previousStatus !== "Resolved" || !ticket.resolvedAt) ticket.resolvedAt = completedAt;
       ticket.dismissedAt = null;
+      if (!ticket.isArchived || !ticket.archivedAt) ticket.archivedAt = completedAt;
+      ticket.isArchived = true;
     } else if (status === "Dismissed") {
       ticket.dismissedAt = Date.now();
       ticket.resolvedAt = null;
@@ -338,7 +367,13 @@ const addTicketNote = async (req, res) => {
       .populate("notes.addedBy", "firstName lastName role")
       .populate("linkedTicket");
 
-    res.status(200).json(updatedTicket);
+    res
+      .status(200)
+      .json(
+        req.user.role === "resident"
+          ? sanitizeForResident(updatedTicket, req.user.id)
+          : updatedTicket,
+      );
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });

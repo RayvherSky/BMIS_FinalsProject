@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Card, Descriptions, Form, Input, Modal, Spin, Tag, message } from 'antd';
-import AppLayout from '../components/Layout/AppLayout';
 import { useAuth } from '../context/AuthContext';
+import { PHONE_HELP, phoneRulesFor } from '../utils/phone';
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
@@ -17,6 +17,7 @@ const Profile = () => {
 
   const saveProfile = async (values) => {
     const { password, ...data } = values;
+    if (data.phone === user.phone) delete data.phone;
     if (password) data.password = password;
     setSaving(true);
     try {
@@ -34,7 +35,7 @@ const Profile = () => {
   };
 
   return (
-    <AppLayout>
+    <>
       <h1 className="page-title">My Profile</h1>
       <Card extra={<Button type="primary" onClick={openEditor}>Edit Profile</Button>}>
         <Descriptions bordered column={{ xs: 1, sm: 1, md: 2 }} items={[
@@ -50,7 +51,7 @@ const Profile = () => {
           <Form form={form} layout="vertical" onFinish={saveProfile}>
             <Form.Item name="firstName" label="First Name" rules={[{ required: true, whitespace: true, message: 'Please enter your first name' }]}><Input /></Form.Item>
             <Form.Item name="lastName" label="Last Name" rules={[{ required: true, whitespace: true, message: 'Please enter your last name' }]}><Input /></Form.Item>
-            <Form.Item name="phone" label="Phone"><Input /></Form.Item>
+            <Form.Item name="phone" label="Phone" rules={phoneRulesFor(user.phone)} extra={PHONE_HELP}><Input type="tel" autoComplete="tel" /></Form.Item>
             <Form.Item name="address" label="Address"><Input /></Form.Item>
             <Form.Item name="password" label="New Password" extra="Leave blank to keep your current password." rules={[{ min: 6, message: 'Password must be at least 6 characters' }]}><Input.Password autoComplete="new-password" /></Form.Item>
             <Button type="primary" htmlType="submit" loading={saving}>Save Changes</Button>
@@ -58,7 +59,7 @@ const Profile = () => {
           </Form>
         </Spin>
       </Modal>
-    </AppLayout>
+    </>
   );
 };
 

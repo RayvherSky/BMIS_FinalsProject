@@ -1,4 +1,5 @@
 const Ticket = require('../models/Ticket');
+const escapeSearch = require('../utils/escapeSearch');
 
 // @desc    Get all archived tickets
 // @route   GET /api/archive
@@ -6,6 +7,9 @@ const Ticket = require('../models/Ticket');
 const getArchivedTickets = async (req, res) => {
   try {
     const { category, status, priority, search } = req.query;
+    if (search !== undefined && typeof search !== 'string') {
+      return res.status(400).json({ message: 'Search must be text' });
+    }
 
     const filter = { isArchived: true };
 
@@ -15,14 +19,14 @@ const getArchivedTickets = async (req, res) => {
 
     if (search) {
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { title: { $regex: escapeSearch(search), $options: 'i' } },
+        { description: { $regex: escapeSearch(search), $options: 'i' } },
       ];
     }
 
     const tickets = await Ticket.find(filter)
       .populate('submittedBy', 'firstName lastName email')
-      .sort({ updatedAt: -1 });
+      .sort({ archivedAt: -1, updatedAt: -1 });
 
     res.status(200).json(tickets);
   } catch (error) {
@@ -53,6 +57,7 @@ const archiveTicket = async (req, res) => {
     }
 
     ticket.isArchived = true;
+    ticket.archivedAt = new Date();
     await ticket.save();
 
     const archivedTicket = await Ticket.findById(ticket._id).populate(
@@ -85,6 +90,7 @@ const restoreTicket = async (req, res) => {
     }
 
     ticket.isArchived = false;
+    ticket.archivedAt = null;
     await ticket.save();
 
     const restoredTicket = await Ticket.findById(ticket._id).populate(

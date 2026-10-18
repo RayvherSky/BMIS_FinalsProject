@@ -110,10 +110,10 @@ npm test
 
 ## Project references
 
-- `PROJECT_STATUS.md` — implementation specification, checklist and current verification record.
-- `CTSYSINL-PROJECT-OVERVIEW.pdf` — academic requirements.
-- `BMIS_Context.md` — purpose, users and scope.
-- `agentprompt.md` — original build handoff.
-- `docs/implementation-plan.md` — completion work and recorded integration decisions.
+- [Current session handoff](Context/SESSION_HANDOFF.md) — start here for completed work, confirmed decisions, verification limits, and the next step.
+- [Project ledger](Context/PROJECT_STATUS.md) — implementation specification, checklist, and historical verification record.
+- [Academic requirements](Context/CTSYSINL-PROJECT-OVERVIEW.pdf) — original project requirements.
+- [Backlog](update.md) — the user's notes and remaining feature ideas.
+- [Original implementation record](docs/implementation-plan.md) — historical completion work and integration decisions.
 
 The application uses React 18, Vite, Ant Design, Express, Mongoose, JWT authentication and local disk uploads. It is intended for the localhost demonstration described in the project references.

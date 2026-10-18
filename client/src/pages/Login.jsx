@@ -34,7 +34,6 @@ const Login = () => {
         <div className="login-vignette" aria-hidden="true" />
         <p className="login-location">Parañaque City <span aria-hidden="true">/</span> Metro Manila</p>
         <div className="login-logo-overlay">
-          <img src={barangayLogo} alt="Barangay Baclaran seal" width="176" height="176" />
           <h2>Barangay Baclaran</h2>
           <p>Parañaque City</p>
         </div>
@@ -48,9 +47,9 @@ const Login = () => {
       <div className="login-right-wrapper">
         <section className="login-right-panel" aria-labelledby="login-heading">
           <div className="login-right-inner">
-            <div className="login-mobile-brand">
-              <img src={barangayLogo} alt="" width="56" height="56" />
+            <div className="login-form-brand">
               <div><strong>Barangay Baclaran</strong><span>Parañaque City</span></div>
+              <img className="login-form-logo" src={barangayLogo} alt="Barangay Baclaran seal" width="80" height="80" />
             </div>
             <header className="login-form-header">
               <p className="login-eyebrow">Incident &amp; Hazard Reporting System</p>

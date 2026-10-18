@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Button, Card, Form, Input, Select, Spin, Upload, message } from 'antd';
+import { Button, Card, Form, Input, Select, Spin, Upload, Typography, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/Layout/AppLayout';
 import { createTicket } from '../api/ticketApi';
-import { CATEGORIES, PRIORITIES } from '../utils/helpers';
+import { CATEGORIES } from '../utils/helpers';
 
 const SubmitTicket = () => {
   const navigate = useNavigate();
@@ -45,18 +44,17 @@ const SubmitTicket = () => {
     }
   };
 
-  // Add "Others" to the bottom of the existing categories
-  const categoryOptions = [
-    ...CATEGORIES.map((value) => ({ value, label: value })),
-    { value: 'Others', label: 'Others (Please specify)' }
-  ];
+  const categoryOptions = CATEGORIES.map((value) => ({
+    value,
+    label: value === 'Others' ? 'Others (Please specify)' : value,
+  }));
 
   return (
-    <AppLayout>
+    <>
       <h1 className="page-title">Report an Incident</h1>
       <Card style={{ maxWidth: 860 }}>
         <Spin spinning={loading}>
-          <Form layout="vertical" onFinish={submit} initialValues={{ priority: 'Medium' }} disabled={loading}>
+          <Form layout="vertical" onFinish={submit} disabled={loading}>
             <Form.Item name="title" label="Title" rules={[{ required: true, whitespace: true, message: 'Please enter a title' }]}><Input placeholder="Briefly describe the issue" /></Form.Item>
             <Form.Item name="description" label="Description" rules={[{ required: true, whitespace: true, message: 'Please describe the incident' }]}><Input.TextArea rows={4} placeholder="Describe what happened and how residents are affected" /></Form.Item>
             
@@ -82,7 +80,7 @@ const SubmitTicket = () => {
             )}
 
             <Form.Item name="location" label="Location" rules={[{ required: true, whitespace: true, message: 'Please enter the location' }]}><Input placeholder="e.g., Quirino Ave. cor. Redemptorist Rd." /></Form.Item>
-            <Form.Item name="priority" label="Priority" rules={[{ required: true }]}><Select aria-label="Priority" options={PRIORITIES.map((value) => ({ value, label: value }))} /></Form.Item>
+            <Typography.Paragraph type="secondary">New reports start at Medium priority. An administrator will assess the situation and update its priority.</Typography.Paragraph>
             <Form.Item label="Evidence Photo" extra="Optional. One JPEG, PNG, or WebP photo, up to 5 MB.">
               <Upload accept="image/jpeg,image/png,image/webp" listType="picture" maxCount={1} fileList={fileList} beforeUpload={validatePhoto} onChange={({ fileList: files }) => setFileList(files.slice(-1))}>
                 <Button icon={<UploadOutlined />}>Choose Photo</Button>
@@ -92,7 +90,7 @@ const SubmitTicket = () => {
           </Form>
         </Spin>
       </Card>
-    </AppLayout>
+    </>
   );
 };
 

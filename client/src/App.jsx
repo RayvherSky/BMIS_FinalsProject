@@ -4,6 +4,7 @@ import { ConfigProvider } from 'antd';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 import SplashScreen from './components/SplashScreen/SplashScreen';
+import AppLayout from './components/Layout/AppLayout';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -72,23 +73,23 @@ function App() {
   
             {/* Protected: any authenticated user */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/profile" element={<Profile />} />
-            </Route>
-  
-            {/* Protected: resident role */}
-            <Route element={<ProtectedRoute allowedRoles={['resident']} />}>
-              <Route path="/resident/dashboard" element={<ResidentDashboard />} />
-              <Route path="/resident/submit-ticket" element={<SubmitTicket />} />
-              <Route path="/resident/my-tickets" element={<MyTickets />} />
-              <Route path="/resident/ticket/:id" element={<TicketDetails />} />
-            </Route>
-  
-            {/* Protected: admin role */}
-            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/ticket/:id" element={<TicketDetails />} />
-              <Route path="/admin/users" element={<UserManagement />} />
-              <Route path="/admin/archive" element={<ArchiveView />} />
+              <Route element={<AppLayout />}>
+                <Route path="/profile" element={<Profile />} />
+                {/* Protected: resident role */}
+                <Route element={<ProtectedRoute allowedRoles={['resident']} />}>
+                  <Route path="/resident/dashboard" element={<ResidentDashboard />} />
+                  <Route path="/resident/submit-ticket" element={<SubmitTicket />} />
+                  <Route path="/resident/my-tickets" element={<MyTickets />} />
+                  <Route path="/resident/ticket/:id" element={<TicketDetails />} />
+                </Route>
+                {/* Protected: admin role */}
+                <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                  <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                  <Route path="/admin/ticket/:id" element={<TicketDetails />} />
+                  <Route path="/admin/users" element={<UserManagement />} />
+                  <Route path="/admin/archive" element={<ArchiveView />} />
+                </Route>
+              </Route>
             </Route>
   
             {/* Catch all */}

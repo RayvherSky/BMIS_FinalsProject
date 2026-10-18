@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Input, Select, Spin, Table, Tag, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/Layout/AppLayout';
 import StatusBadge from '../components/StatusBadge/StatusBadge';
 import { getMyTickets } from '../api/ticketApi';
 import { CATEGORIES, STATUSES, formatDate, getPriorityColor } from '../utils/helpers';
@@ -43,7 +42,7 @@ const MyTickets = () => {
   ];
 
   return (
-    <AppLayout>
+    <>
       <h1 className="page-title">My Tickets</h1>
       <div className="filter-bar">
         <Select aria-label="Category filter" placeholder="All Categories" allowClear value={category} onChange={setCategory} options={CATEGORIES.map((value) => ({ value, label: value }))} style={{ minWidth: 200 }} virtual={false} />
@@ -53,7 +52,7 @@ const MyTickets = () => {
       <Spin spinning={loading} tip="Loading tickets...">
         <Table rowKey="_id" columns={columns} dataSource={tickets} scroll={{ x: 1000 }} pagination={{ current: page, onChange: setPage, defaultPageSize: 10, showSizeChanger: false }} onRow={(ticket) => ({ onClick: () => navigate(`/resident/ticket/${ticket._id}`), style: { cursor: 'pointer' } })} />
       </Spin>
-    </AppLayout>
+    </>
   );
 };
 

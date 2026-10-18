@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-18",
+  "scope": "Six supplied notes: dashboard motion/actions, one sidebar toggle, right-to-left dashboard entrance, moving sidebar highlight, resolved auto-archive and status categorization",
+  "confirmedDecisions": {
+    "entrance": "Content enters from the right edge and moves left into place",
+    "autoArchive": "Newly resolved tickets immediately; Dismissed tickets remain manual",
+    "existingRecords": "Unchanged; no migration",
+    "archiveCategories": "All / Resolved / Dismissed tabs alongside the existing incident-category filter"
+  },
+  "implemented": [
+    "Dashboard entrance, staggered statistic cards and hover motion with reduced-motion support",
+    "Prominent resident report/list actions with narrow-screen stacking",
+    "One accessible sidebar toggle and a persistent shared authenticated layout",
+    "Measured moving sidebar indicator and Archive-origin detail navigation",
+    "Resolved auto-archive, explicit archive timestamp, manual dismissal archive, timestamp-preserving restore",
+    "Archive status tabs/counts combined with category/search and safe pagination after restore"
+  ],
+  "focusedTests": {
+    "command": "node --test --test-isolation=none server/tests/audit-repairs.test.js server/tests/notes-changes.test.js",
+    "passed": 41,
+    "failed": 0,
+    "skipped": 0,
+    "priorChecks": 34,
+    "newArchiveHttpChecks": 7,
+    "beforeArchiveImplementation": { "passed": 1, "failed": 6 },
+    "limits": "Real loopback HTTP, Express routes, auth/role middleware and controllers; isolated database/JWT fixtures, not live MongoDB/JWT integration."
+  },
+  "browserDiscovery": { "cases": 56, "files": 5, "newNavigationArchiveCases": 8, "executed": false },
+  "browserGate": { "command": "cd client; npm test", "status": "blocked before test execution", "error": "spawn EPERM", "exitCode": 1 },
+  "scopedBrowserGate": { "command": "cd client; npx playwright test tests/navigation-archive.spec.js", "status": "blocked before test execution", "error": "spawn EPERM", "exitCode": 1 },
+  "buildGate": { "command": "cd client; npm run build", "status": "blocked starting esbuild while loading Vite config", "error": "spawn EPERM", "exitCode": 1 },
+  "staticChecks": "Relevant JavaScript/JSX and App.css parse; git diff --check passes.",
+  "independentReview": "Fixed Archive-origin Back during pending/failed detail fetches and query-bearing archive test fixture matching. No remaining important findings; rendered motion/geometry unverified.",
+  "normalDataModified": false,
+  "acceptanceComplete": false,
+  "manualGuide": "docs/changes/2026-10-18-navigation-archive.md"
+}

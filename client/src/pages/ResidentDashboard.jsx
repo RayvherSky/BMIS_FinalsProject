@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Empty, Row, Spin, Statistic, Typography, message } from 'antd';
 import { FileTextOutlined, ClockCircleOutlined, SyncOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/Layout/AppLayout';
 import TicketCard from '../components/TicketCard/TicketCard';
 import { useAuth } from '../context/AuthContext';
 import { getMyTickets } from '../api/ticketApi';
@@ -38,22 +37,25 @@ const ResidentDashboard = () => {
   const recent = [...tickets].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
 
   return (
-    <AppLayout>
+    <>
       <div className="welcome-section">
         <h1>Welcome, {user.firstName}!</h1>
         <p>Report non-emergency issues in Barangay Baclaran and follow their progress.</p>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/resident/submit-ticket')} style={{ marginTop: 16 }}>Report New Incident</Button>
+        <div className="dashboard-actions">
+          <Button size="large" type="primary" className="dashboard-report-action" icon={<PlusOutlined />} onClick={() => navigate('/resident/submit-ticket')}>Report New Incident</Button>
+          <Button size="large" className="dashboard-tickets-action" icon={<FileTextOutlined />} onClick={() => navigate('/resident/my-tickets')}>View all tickets</Button>
+        </div>
       </div>
       <Spin spinning={loading} tip="Loading tickets...">
         <Row gutter={[16, 16]} className="stats-row">
           {stats.map((stat) => <Col xs={24} sm={12} xl={6} key={stat.title}><Card className="stat-card"><Statistic title={stat.title} value={stat.value} prefix={stat.icon} valueStyle={{ color: stat.color }} /></Card></Col>)}
         </Row>
-        <Card title="Recent Tickets" extra={<Button type="link" onClick={() => navigate('/resident/my-tickets')}>View all tickets</Button>}>
+        <Card title="Recent Tickets" className="dashboard-recent">
           {!loading && recent.length === 0 ? <Empty description="No tickets yet" /> : recent.map((ticket) => <TicketCard ticket={ticket} key={ticket._id} />)}
         </Card>
         <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>Your dashboard shows tickets currently in the active queue.</Typography.Paragraph>
       </Spin>
-    </AppLayout>
+    </>
   );
 };
 

@@ -69,6 +69,10 @@ const ticketSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
     resolvedAt: {
       type: Date,
       default: null,

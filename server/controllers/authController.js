@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { isValidOptionalPhone, PHONE_MESSAGE } = require('../utils/validatePhone');
 
 // Helper: Generate JWT token
 const generateToken = (id, role) => {
@@ -23,6 +24,10 @@ const register = async (req, res) => {
 
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    if (!isValidOptionalPhone(phone)) {
+      return res.status(400).json({ message: PHONE_MESSAGE });
     }
 
     // Check if email already exists
@@ -129,6 +134,10 @@ const updateProfile = async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!isValidOptionalPhone(phone)) {
+      return res.status(400).json({ message: PHONE_MESSAGE });
     }
 
     // Update allowed fields

@@ -10,6 +10,7 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { PHONE_HELP, phoneRules } from '../utils/phone';
 
 const { Text } = Typography;
 
@@ -130,8 +131,10 @@ const Register = () => {
             </Col>
           </Row>
 
-          <Form.Item name="phone">
+          <Form.Item name="phone" rules={phoneRules} extra={PHONE_HELP}>
             <Input
+              type="tel"
+              autoComplete="tel"
               prefix={<PhoneOutlined style={{ color: '#0A4D68' }} />}
               placeholder="Phone Number (optional)"
             />

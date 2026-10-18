@@ -1,0 +1,220 @@
+{
+  "date": "2026-10-18",
+  "timezone": "Asia/Manila",
+  "commit": "61f6a0b",
+  "scope": "Audit only; production code unchanged",
+  "build": {
+    "status": "passed",
+    "seconds": 11.23,
+    "warning": "Existing bundle-size warning"
+  },
+  "baseline": {
+    "command": "npm test (before adding the new audit file)",
+    "passed": 17,
+    "failed": 2,
+    "total": 19,
+    "failures": [
+      "duplicate linking excludes self and persists a navigable reference",
+      "a delayed ticket mutation cannot replace the record after linked navigation"
+    ],
+    "reportedDuration": "3.6 minutes"
+  },
+  "updatedFeatures": {
+    "command": "npx playwright test tests/updated-features.spec.js --output=test-results/updated-features-final --reporter=list,json",
+    "stats": {
+      "startTime": "2026-10-18T11:20:37.666Z",
+      "duration": 93532.015,
+      "expected": 9,
+      "skipped": 0,
+      "unexpected": 9,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "name": "UPD-01 batch linking persists two children and unlink preserves the other relationship",
+        "file": "updated-features.spec.js",
+        "line": 46,
+        "status": "passed",
+        "durationMs": 8108,
+        "errors": []
+      },
+      {
+        "name": "UPD-02 priority changes require confirmation and persist after reload",
+        "file": "updated-features.spec.js",
+        "line": 73,
+        "status": "passed",
+        "durationMs": 6366,
+        "errors": []
+      },
+      {
+        "name": "UPD-03 priority API rejects invalid levels and resident writes",
+        "file": "updated-features.spec.js",
+        "line": 92,
+        "status": "passed",
+        "durationMs": 217,
+        "errors": []
+      },
+      {
+        "name": "UPD-04 Others form requires a description and saves the custom category",
+        "file": "updated-features.spec.js",
+        "line": 102,
+        "status": "passed",
+        "durationMs": 4465,
+        "errors": []
+      },
+      {
+        "name": "UPD-05 public updates appear in the resident timeline and survive reload",
+        "file": "updated-features.spec.js",
+        "line": 123,
+        "status": "passed",
+        "durationMs": 3818,
+        "errors": []
+      },
+      {
+        "name": "UPD-06 detail GET hides internal notes and other residents cannot post",
+        "file": "updated-features.spec.js",
+        "line": 135,
+        "status": "passed",
+        "durationMs": 401,
+        "errors": []
+      },
+      {
+        "name": "UPD-07 a resident cannot create a private internal note",
+        "file": "updated-features.spec.js",
+        "line": 149,
+        "status": "passed",
+        "durationMs": 109,
+        "errors": []
+      },
+      {
+        "name": "AUD-01 resident list responses must exclude internal note contents",
+        "file": "updated-features.spec.js",
+        "line": 157,
+        "status": "failed",
+        "durationMs": 262,
+        "errors": [
+          "Error: expect(received).toEqual(expected) // deep equality - Expected  - 1 + Received  + 9 - Array []"
+        ]
+      },
+      {
+        "name": "AUD-01 posting a resident update must not return existing internal notes",
+        "file": "updated-features.spec.js",
+        "line": 166,
+        "status": "failed",
+        "durationMs": 278,
+        "errors": [
+          "Error: expect(received).toEqual(expected) // deep equality - Expected  - 0 + Received  + 1   Array ["
+        ]
+      },
+      {
+        "name": "AUD-02 note responses must not expose another residents linked report",
+        "file": "updated-features.spec.js",
+        "line": 175,
+        "status": "failed",
+        "durationMs": 389,
+        "errors": [
+          "Error: expect(received).toEqual(expected) // deep equality - Expected  -  0 + Received  + 17   Object {"
+        ]
+      },
+      {
+        "name": "AUD-03 search treats a literal bracket safely across all searchable APIs",
+        "file": "updated-features.spec.js",
+        "line": 186,
+        "status": "failed",
+        "durationMs": 263,
+        "errors": [
+          "Error: /api/tickets must accept a literal bracket without a server error expect(received).toBe(expected) // Object.is equality Expected: 200 Received: 500",
+          "Error: /api/tickets/my-tickets must accept a literal bracket without a server error expect(received).toBe(expected) // Object.is equality Expected: 200 Received: 500",
+          "Error: /api/archive must accept a literal bracket without a server error expect(received).toBe(expected) // Object.is equality Expected: 200 Received: 500",
+          "Error: /api/users must accept a literal bracket without a server error expect(received).toBe(expected) // Object.is equality Expected: 200 Received: 500"
+        ]
+      },
+      {
+        "name": "AUD-04 Others requires a nonblank custom category at the API boundary",
+        "file": "updated-features.spec.js",
+        "line": 198,
+        "status": "failed",
+        "durationMs": 163,
+        "errors": [
+          "Error: customCategory=\"\" must be rejected expect(received).toBe(expected) // Object.is equality Expected: 400 Received: 201",
+          "Error: customCategory=\"   \" must be rejected expect(received).toBe(expected) // Object.is equality Expected: 400 Received: 201"
+        ]
+      },
+      {
+        "name": "AUD-05 Others reports must be selectable in category filters for both roles",
+        "file": "updated-features.spec.js",
+        "line": 209,
+        "status": "failed",
+        "durationMs": 13229,
+        "errors": [
+          "Error: /admin/dashboard category choices expect(received).toContain(expected) // indexOf Expected value: \"Others\" Received array: [\"Sanitation\", \"Infrastructure\", \"Security\", \"Noise Complaint\", \"Public Safety\", \"Environmental Hazard\", \"Utilities\"]",
+          "Error: /admin/archive category choices expect(received).toContain(expected) // indexOf Expected value: \"Others\" Received array: [\"Sanitation\", \"Infrastructure\", \"Security\", \"Noise Complaint\", \"Public Safety\", \"Environmental Hazard\", \"Utilities\"]",
+          "Error: /resident/my-tickets category choices expect(received).toContain(expected) // indexOf Expected value: \"Others\" Received array: [\"Sanitation\", \"Infrastructure\", \"Security\", \"Noise Complaint\", \"Public Safety\", \"Environmental Hazard\", \"Utilities\"]"
+        ]
+      },
+      {
+        "name": "UPD-08 dashboard charts show known counts and stay global when directory search changes",
+        "file": "updated-features.spec.js",
+        "line": 226,
+        "status": "passed",
+        "durationMs": 5190,
+        "errors": []
+      },
+      {
+        "name": "UPD-09 empty analytics data shows zero totals without invalid charts",
+        "file": "updated-features.spec.js",
+        "line": 247,
+        "status": "passed",
+        "durationMs": 1441,
+        "errors": []
+      },
+      {
+        "name": "AUD-06 invalid optional phone numbers must be rejected during registration",
+        "file": "updated-features.spec.js",
+        "line": 256,
+        "status": "failed",
+        "durationMs": 127,
+        "errors": [
+          "Error: expect(received).toBe(expected) // Object.is equality Expected: 400 Received: 201   259 |     password: PASSWORD, phone: 'not-a-phone-number',"
+        ]
+      },
+      {
+        "name": "UPD-10 new analytics and note controls fit a narrow admin viewport",
+        "file": "updated-features.spec.js",
+        "line": 264,
+        "status": "failed",
+        "durationMs": 13433,
+        "errors": [
+          "Error: expect(received).toBeLessThanOrEqual(expected) Expected: <= 375 Received:    409 Call Log:"
+        ]
+      },
+      {
+        "name": "AUD-07 a late batch-link refresh cannot overwrite the newly opened ticket",
+        "file": "updated-features.spec.js",
+        "line": 278,
+        "status": "failed",
+        "durationMs": 16403,
+        "errors": [
+          "Error: expect(locator).toHaveCount(expected) failed Locator:  locator('.detail-card').getByText('Audit Ticket A', { exact: true }) Expected: 0 Received: 1"
+        ]
+      }
+    ],
+    "passed": 9,
+    "failed": 9
+  },
+  "normalDatabase": {
+    "database": "bmis",
+    "users": 10,
+    "admins": 2,
+    "residents": 8,
+    "tickets": 29,
+    "status": {
+      "Pending": 4,
+      "In Progress": 4,
+      "Resolved": 14,
+      "Dismissed": 7
+    },
+    "archived": 0,
+    "readOnlyInspection": true
+  }
+}

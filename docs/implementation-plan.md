@@ -1,6 +1,8 @@
 # BMIS frontend completion
 
-**Goal:** Complete the approved Barangay Baclaran incident reporting workflow from `PROJECT_STATUS.md` and `agentprompt.md`.
+**Historical record:** This plan describes the original frontend completion, not the current assignment. For the current stopping point and confirmed behavior, read [the session handoff](../Context/SESSION_HANDOFF.md). The original build prompts were removed during documentation consolidation.
+
+**Original goal:** Complete the approved Barangay Baclaran incident reporting workflow recorded in the [project ledger](../Context/PROJECT_STATUS.md).
 
 **Approach:** Preserve React, Ant Design, AppLayout, the existing API wrappers, routes, and government theme. API wrappers return the response body directly (arrays for lists, objects for details). Implement in the handoff's page order. Work in the supplied directory; this project has no Git repository.
 

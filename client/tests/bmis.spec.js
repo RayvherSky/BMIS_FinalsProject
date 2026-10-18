@@ -129,10 +129,10 @@ test('resident submits evidence and admin processes, archives and restores the t
   await expect(page.getByRole('button', { name: 'Mark Resolved' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Resolved' }).click();
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Archive Ticket', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Archive Ticket', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+  await expect(page.getByText('Ticket resolved and moved to Archive', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Archive Ticket', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Go to Archived Tickets', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/archive$/);
   const headers = await authenticate(request);
   expect((await (await request.get('/api/tickets', { headers })).json()).some((item) => item._id === ticket._id)).toBeFalsy();
   await page.goto('/admin/archive');
@@ -146,6 +146,7 @@ test('resident submits evidence and admin processes, archives and restores the t
   expect(restored.isArchived).toBe(false);
   expect(restored.status).toBe('Resolved');
   expect(restored.resolvedAt).toBeTruthy();
+  expect(restored.archivedAt).toBeNull();
 });
 
 test('upload validation rejects unsupported files and photos over five MB', async ({ page }) => {
@@ -189,17 +190,34 @@ test('duplicate linking excludes self and persists a navigable reference', async
   const primary = await createIncident(request, residentHeaders, 'Acceptance: original streetlight report');
   const duplicate = await createIncident(request, residentHeaders, 'Acceptance: duplicate streetlight report');
   await login(page, ADMIN);
-  await page.goto(`/admin/ticket/${duplicate._id}`);
-  await page.getByRole('combobox', { name: 'Link to Duplicate' }).click();
-  await expect(page.getByRole('option', { name: duplicate.title, exact: true })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Link to Duplicate' }).fill(primary.title);
-  await page.getByRole('option', { name: primary.title, exact: true }).click();
+  await page.goto(`/admin/ticket/${primary._id}`);
+  const select = page.getByRole('combobox', { name: 'Link to Duplicate' });
+  await select.click();
+  await expect(page.getByRole('option', { name: `${primary.title} (Pending)`, exact: true })).toHaveCount(0);
+  await select.fill(duplicate.title);
+  await page.getByRole('option', { name: `${duplicate.title} (Pending)`, exact: true }).click();
+  await select.press('Escape');
+  const adminHeaders = await authenticate(request);
+  const before = await (await request.get(`/api/tickets/${duplicate._id}`, { headers: adminHeaders })).json();
+  expect(before.linkedTicket).toBeNull();
+  await page.getByRole('button', { name: 'Link Selected', exact: true }).click();
+  await expect(page.getByRole('link', { name: `• ${duplicate.title}`, exact: true })).toBeVisible();
+  const persisted = await (await request.get(`/api/tickets/${duplicate._id}`, { headers: adminHeaders })).json();
+  expect(persisted.linkedTicket._id).toBe(primary._id);
+  await page.reload();
+  await page.getByRole('link', { name: `• ${duplicate.title}`, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/ticket/${duplicate._id}$`));
+  await page.reload();
   await expect(page.getByRole('link', { name: primary.title, exact: true })).toBeVisible();
   await page.getByRole('link', { name: primary.title, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/admin/ticket/${primary._id}$`));
 });
 
-test('admin edits user contact details and role through the modal', async ({ page, request }) => {
+test('admin edits contact details separately from a confirmed role change', async ({ page, request }) => {
+  const headers = await authenticate(request);
+  const users = await (await request.get('/api/users?search=pedro.garcia', { headers })).json();
+  const pedro = users[0];
+  try {
   await login(page, ADMIN);
   await page.goto('/admin/users');
   await page.getByPlaceholder('Search users by name or email').fill('pedro.garcia@email.com');
@@ -209,14 +227,37 @@ test('admin edits user contact details and role through the modal', async ({ pag
   await row.getByRole('button', { name: 'Edit', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Phone', { exact: true }).fill('09209998877');
-  await choose(page, 'Role', 'Admin');
+  await expect(dialog.getByRole('combobox', { name: 'Role', exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Save Changes' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(row).toContainText('09209998877');
+  await expect(row).toContainText('resident');
+  await row.getByRole('button', { name: 'Change Role', exact: true }).click();
+  const confirm = page.getByRole('button', { name: 'Confirm Role Change', exact: true });
+  await expect(confirm).toBeDisabled();
+  await choose(page, 'New Role', 'Admin');
+  await page.getByLabel('Confirm account email', { exact: true }).fill('wrong@example.com');
+  await expect(confirm).toBeDisabled();
+  await page.getByLabel('Confirm account email', { exact: true }).fill(pedro.email);
+  await expect(confirm).toBeEnabled();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(row).toContainText('resident');
+  await row.getByRole('button', { name: 'Change Role', exact: true }).click();
+  await expect(page.getByLabel('Confirm account email', { exact: true })).toHaveValue('');
+  await choose(page, 'New Role', 'Admin');
+  await page.getByLabel('Confirm account email', { exact: true }).fill(pedro.email);
+  await confirm.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(row).toContainText('admin');
-  const headers = await authenticate(request);
-  const users = await (await request.get('/api/users?search=pedro.garcia', { headers })).json();
-  await request.put(`/api/users/${users[0]._id}`, { headers, data: { phone: '09201234570', role: 'resident' } });
+  await page.reload();
+  await page.getByPlaceholder('Search users by name or email').fill(pedro.email);
+  await page.getByPlaceholder('Search users by name or email').press('Enter');
+  await expect(row).toContainText('admin');
+  await expect(row).toContainText('09209998877');
+  } finally {
+    expect((await request.patch(`/api/users/${pedro._id}/role`, { headers, data: { role: 'resident', confirmationEmail: pedro.email } })).status()).toBe(200);
+    expect((await request.put(`/api/users/${pedro._id}`, { headers, data: { phone: '09201234570' } })).status()).toBe(200);
+  }
 });
 
 test('role routes and ticket ownership are enforced and missing tickets are handled', async ({ page, request }) => {
@@ -263,13 +304,13 @@ test('changed roles take effect on existing sessions immediately', async ({ requ
   const users = await (await request.get('/api/users?search=pedro.garcia', { headers: adminHeaders })).json();
   const pedro = users[0];
   try {
-    await request.put(`/api/users/${pedro._id}`, { headers: adminHeaders, data: { role: 'admin' } });
+    expect((await request.patch(`/api/users/${pedro._id}/role`, { headers: adminHeaders, data: { role: 'admin', confirmationEmail: pedro.email } })).status()).toBe(200);
     expect((await request.get('/api/users', { headers: pedroHeaders })).status()).toBe(200);
     const elevatedHeaders = await authenticate(request, 'pedro.garcia@email.com');
-    await request.put(`/api/users/${pedro._id}`, { headers: adminHeaders, data: { role: 'resident' } });
+    expect((await request.patch(`/api/users/${pedro._id}/role`, { headers: adminHeaders, data: { role: 'resident', confirmationEmail: pedro.email } })).status()).toBe(200);
     expect((await request.get('/api/users', { headers: elevatedHeaders })).status()).toBe(403);
   } finally {
-    await request.put(`/api/users/${pedro._id}`, { headers: adminHeaders, data: { role: 'resident' } });
+    expect((await request.patch(`/api/users/${pedro._id}/role`, { headers: adminHeaders, data: { role: 'resident', confirmationEmail: pedro.email } })).status()).toBe(200);
   }
 });
 

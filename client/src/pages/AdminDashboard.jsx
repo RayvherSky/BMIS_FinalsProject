@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Button, Card, Col, Input, Row, Select, Spin, Statistic, Table, Tag, message, Divider, Space, Typography } from 'antd';
 import { FileTextOutlined, ClockCircleOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/Layout/AppLayout';
 import StatusBadge from '../components/StatusBadge/StatusBadge';
 import { getAllTickets } from '../api/ticketApi';
 import { CATEGORIES, STATUSES, PRIORITIES, formatDate, getPriorityColor } from '../utils/helpers';
@@ -119,7 +118,7 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <AppLayout>
+    <>
       <h1 className="page-title">Dashboard</h1>
       
       <Spin spinning={statsLoading}>
@@ -223,7 +222,7 @@ const AdminDashboard = () => {
       <Spin spinning={loading} tip="Loading tickets...">
         <Table rowKey="_id" columns={columns} dataSource={tickets} scroll={{ x: 1200 }} pagination={{ current: page, onChange: setPage, defaultPageSize: 10, showSizeChanger: false }} />
       </Spin>
-    </AppLayout>
+    </>
   );
 };
 

@@ -22,6 +22,31 @@ test('profile reads the current user and preserves unsaved edits after failure',
   await expect(page.getByLabel('Phone', { exact: true })).toHaveValue('09190009999');
 });
 
+for (const editor of ['profile', 'admin']) {
+test(`AUD-06 ${editor} form preserves an unchanged legacy contact when editing an address`, async ({ page }) => {
+  let stored = { ...resident, phone: 'legacy contact' };
+  const currentUser = editor === 'admin' ? { ...resident, _id: '000000000000000000000002', role: 'admin' } : stored;
+  await page.route('**/api/auth/me', route => route.fulfill({ json: currentUser }));
+  await page.route('**/api/users', route => route.fulfill({ json: [stored] }));
+  const updatePath = editor === 'admin' ? `/api/users/${resident._id}` : '/api/auth/profile';
+  await page.route(`**${updatePath}`, route => {
+    stored = { ...stored, ...route.request().postDataJSON() };
+    return route.fulfill({ json: stored });
+  });
+  await page.goto(editor === 'admin' ? '/admin/users' : '/profile');
+  await page.getByRole('button', { name: editor === 'admin' ? 'Edit' : 'Edit Profile', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Phone', { exact: true })).toHaveValue('legacy contact');
+  await dialog.getByLabel('Address', { exact: true }).fill('Updated address');
+  const saved = page.waitForRequest(request => new URL(request.url()).pathname === updatePath && request.method() === 'PUT');
+  await dialog.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  expect((await saved).postDataJSON()).not.toHaveProperty('phone');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText('Updated address', { exact: true })).toBeVisible();
+  await expect(page.getByText('legacy contact', { exact: true })).toBeVisible();
+});
+}
+
 test('ticket fetch failure leaves an explanatory result and back navigation', async ({ page }) => {
   await page.route('**/api/tickets/000000000000000000000099', (route) => route.fulfill({ status: 404, json: { message: 'Ticket not found' } }));
   await page.goto('/resident/ticket/000000000000000000000099');
@@ -47,26 +72,32 @@ test('a delayed ticket mutation cannot replace the record after linked navigatio
   await page.route('**/api/tickets/b', (route) => route.fulfill({ json: ticketB }));
   let release;
   const delayed = new Promise((resolve) => { release = resolve; });
-  await page.route('**/api/tickets/a/link', async (route) => {
+  await page.route('**/api/tickets/c/link', async (route) => {
     await delayed;
-    await route.fulfill({ json: { ...ticketA, linkedTicket: ticketC } });
+    await route.fulfill({ json: { ...ticketC, linkedTicket: ticketA } });
   });
+  try {
   await page.goto('/admin/ticket/a');
   const select = page.getByRole('combobox', { name: 'Link to Duplicate' });
   await select.focus();
   await select.press('ArrowDown');
-  const mutation = page.waitForRequest('**/api/tickets/a/link');
-  await page.getByRole('option', { name: 'Ticket C', exact: true }).click();
-  await mutation;
+  await expect(page.getByRole('option', { name: 'Ticket A (Pending)', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Ticket C (Pending)', exact: true }).click();
+  await select.press('Escape');
+  const mutation = page.waitForRequest('**/api/tickets/c/link');
+  await page.getByRole('button', { name: 'Link Selected', exact: true }).click();
+  expect((await mutation).postDataJSON()).toEqual({ linkedTicketId: 'a' });
   await page.getByRole('link', { name: 'Ticket B', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/ticket\/b$/);
   await expect(page.locator('.detail-card')).toContainText('Second report');
-  const response = page.waitForResponse('**/api/tickets/a/link');
+  const response = page.waitForResponse('**/api/tickets/c/link');
   release();
   await (await response).finished();
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.locator('.detail-card').getByText('Ticket B', { exact: true })).toBeVisible();
   await expect(page.locator('.detail-card').getByText('Ticket A', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Duplicate tickets linked successfully', { exact: true })).toHaveCount(0);
+  } finally { release(); }
 });
 
 test('resident pages fit a narrow phone viewport', async ({ page }) => {

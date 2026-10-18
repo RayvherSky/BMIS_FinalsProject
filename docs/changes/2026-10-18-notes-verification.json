@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-18",
+  "scope": "Four supplied notes: login seal, separate confirmed role changes, existing admin priority, admin-only priority assignment",
+  "implemented": ["Login form upper-right seal and styling", "Separate confirmed role API and UI", "Resident report creation fixed at Medium; resident priority selector removed"],
+  "alreadyImplementedAndPreserved": ["Admin ticket-priority selector/confirmation", "Admin-only priority PATCH authorization"],
+  "focusedTests": {
+    "command": "node --test --test-isolation=none server/tests/audit-repairs.test.js server/tests/notes-changes.test.js",
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0,
+    "existingFocusedChecks": 25,
+    "newHttpChecks": 9,
+    "limits": "New checks use actual loopback HTTP, Express routes, auth middleware, role guards, and controllers; database execution/writes and JWT verification are fixture-backed, not live MongoDB/JWT integration."
+  },
+  "browserDiscovery": {"cases": 48, "files": 4, "executed": false},
+  "browserGate": {"command": "cd client; npm test", "status": "blocked before test execution", "error": "spawn EPERM", "exitCode": 1},
+  "buildGate": {"command": "cd client; npm run build", "status": "blocked starting esbuild while loading Vite config", "error": "spawn EPERM", "exitCode": 1},
+  "staticChecks": "Changed JS/JSX and CSS parse; scoped git diff --check passes.",
+  "independentReview": "No important defects found; browser and rendered mobile/login layout were not verified.",
+  "designTool": "Superdesign CLI unavailable: npm ENOTCACHED; implemented directly using existing assets/styles.",
+  "normalDataModified": false,
+  "acceptanceComplete": false,
+  "manualGuide": "docs/changes/2026-10-18-requested-notes.md"
+}

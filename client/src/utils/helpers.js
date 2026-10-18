@@ -86,6 +86,7 @@ export const CATEGORIES = [
   'Public Safety',
   'Environmental Hazard',
   'Utilities',
+  'Others',
 ];
 
 /**

@@ -4,6 +4,7 @@ const {
   getAllUsers,
   getUserById,
   updateUser,
+  changeUserRole,
 } = require('../controllers/userController');
 const protect = require('../middleware/authMiddleware');
 const authorize = require('../middleware/roleMiddleware');
@@ -12,5 +13,6 @@ const authorize = require('../middleware/roleMiddleware');
 router.get('/', protect, authorize('admin'), getAllUsers);
 router.get('/:id', protect, authorize('admin'), getUserById);
 router.put('/:id', protect, authorize('admin'), updateUser);
+router.patch('/:id/role', protect, authorize('admin'), changeUserRole);
 
 module.exports = router;

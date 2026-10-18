@@ -14,3 +14,8 @@ export const updateUser = async (id, data) => {
   const response = await api.put(`/api/users/${id}`, data);
   return response.data;
 };
+
+export const changeUserRole = async (id, role, confirmationEmail) => {
+  const response = await api.patch(`/api/users/${id}/role`, { role, confirmationEmail });
+  return response.data;
+};

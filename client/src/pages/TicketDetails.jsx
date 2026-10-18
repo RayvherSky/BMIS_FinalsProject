@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 // ADDED: Checkbox to Ant Design imports
-import { Button, Card, Descriptions, Image, Modal, Result, Select, Space, Spin, Tag, Typography, message, List, Divider, Input, Checkbox } from 'antd';
+import { Button, Card, Descriptions, Grid, Image, Modal, Result, Select, Space, Spin, Tag, Typography, message, List, Divider, Input, Checkbox } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import AppLayout from '../components/Layout/AppLayout';
 import StatusBadge from '../components/StatusBadge/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { getAllTickets, getTicketById, linkTicket, unlinkTicket, updateTicketStatus, updateTicketPriority, addTicketNote } from '../api/ticketApi';
@@ -13,12 +12,14 @@ import { formatDate, getPriorityColor, PRIORITIES } from '../utils/helpers';
 const TicketDetails = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const screens = Grid.useBreakpoint();
   const navigate = useNavigate();
+  const location = useLocation();
   const isAdmin = user.role === 'admin';
   const base = isAdmin ? '/admin' : '/resident';
-  const backPath = isAdmin ? '/admin/dashboard' : '/resident/my-tickets';
   
   const [ticket, setTicket] = useState(null);
+  const backPath = isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : '/resident/my-tickets';
   const [otherTickets, setOtherTickets] = useState([]);
   const [selectedDuplicates, setSelectedDuplicates] = useState([]); 
   const [loading, setLoading] = useState(true);
@@ -80,7 +81,9 @@ const TicketDetails = () => {
   const confirmStatus = (status) => {
     confirmation.current = Modal.confirm({
       title: `Change status to ${status}?`,
-      content: 'The resident will see the updated status on their ticket.',
+      content: status === 'Resolved'
+        ? 'This will resolve the report and move it to Archive immediately.'
+        : 'The resident will see the updated status on their ticket.',
       okText: 'Confirm',
       cancelText: 'Cancel',
       onOk: async () => {
@@ -90,7 +93,7 @@ const TicketDetails = () => {
           const updated = await updateTicketStatus(id, status);
           if (currentView.current !== view) return;
           setTicket(updated);
-          message.success(`Ticket marked ${status}`);
+          message.success(status === 'Resolved' ? 'Ticket resolved and moved to Archive' : `Ticket marked ${status}`);
         } catch (err) {
           if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to update ticket status');
         } finally {
@@ -154,14 +157,16 @@ const TicketDetails = () => {
     try {
       await Promise.all(selectedDuplicates.map(targetId => linkTicket(targetId, id)));
       if (currentView.current !== view) return;
-      message.success('Duplicate tickets linked successfully');
       
       const updated = await getTicketById(id);
+      if (currentView.current !== view) return;
       setTicket(updated);
       setSelectedDuplicates([]);
       
       const data = await getAllTickets();
+      if (currentView.current !== view) return;
       setOtherTickets(data.filter((item) => item._id !== id));
+      message.success('Duplicate tickets linked successfully');
     } catch (err) {
       if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to link duplicate tickets');
     } finally {
@@ -182,11 +187,13 @@ const TicketDetails = () => {
         try {
           await unlinkTicket(targetIdToUnlink);
           if (currentView.current !== view) return;
-          message.success('Ticket unlinked successfully');
           const updated = await getTicketById(id);
+          if (currentView.current !== view) return;
           setTicket(updated);
           const data = await getAllTickets();
+          if (currentView.current !== view) return;
           setOtherTickets(data.filter((item) => item._id !== id));
+          message.success('Ticket unlinked successfully');
         } catch (err) {
           if (currentView.current === view) message.error(err.response?.data?.message || 'Unable to unlink ticket');
         } finally {
@@ -249,7 +256,7 @@ const TicketDetails = () => {
       key: 'linked_master', 
       label: 'Duplicate Of', 
       children: (
-        <Space>
+        <Space wrap>
           <Link to={`${base}/ticket/${ticket.linkedTicket._id}`}>{ticket.linkedTicket.title || 'View master ticket'}</Link>
           {isAdmin && !ticket.isArchived && (
             <Button type="text" danger size="small" onClick={() => handleUnlink(ticket._id)}>Unlink</Button>
@@ -264,7 +271,7 @@ const TicketDetails = () => {
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {linkedToThis.map(dup => (
-            <div key={dup._id} style={{ display: 'flex', alignItems: 'center' }}>
+            <div key={dup._id} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
               <Link to={`${base}/ticket/${dup._id}`}>• {dup.title}</Link>
               <Tag style={{ marginLeft: 8, fontSize: '10px' }}>{dup.status}</Tag>
               {isAdmin && !ticket.isArchived && (
@@ -286,12 +293,12 @@ const TicketDetails = () => {
     : [];
 
   return (
-    <AppLayout>
+    <>
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ marginBottom: 20 }}>Back to tickets</Button>
       <Spin spinning={loading} tip="Loading ticket...">
         {error ? <Result status="warning" title={error} /> : ticket && (
           <Card className="detail-card" title={<h1 style={{ fontSize: 22, color: '#0A4D68', margin: 0 }}>Ticket Details</h1>}>
-            <Descriptions bordered column={{ xs: 1, sm: 1, md: 2 }} items={items} />
+            <Descriptions bordered layout={screens.sm ? 'horizontal' : 'vertical'} column={{ xs: 1, sm: 1, md: 2 }} items={items} />
             {imageUrl && <div style={{ marginTop: 24 }}><Typography.Title level={5}>Evidence Photo</Typography.Title><Image className="detail-image" src={imageUrl} alt={`Evidence for ${ticket.title}`} style={{ maxHeight: 400, objectFit: 'contain' }} /></div>}
             
             <Divider orientation="left" style={{ marginTop: 32 }}>Updates & Notes</Divider>
@@ -304,7 +311,7 @@ const TicketDetails = () => {
                 <List.Item style={{ backgroundColor: note.isPrivate ? '#fffbe6' : 'transparent', padding: '12px', borderRadius: '6px', marginBottom: '8px' }}>
                   <List.Item.Meta
                     title={
-                      <Space>
+                      <Space wrap>
                         <Text strong>{`${note.addedBy?.firstName || 'Unknown'} ${note.addedBy?.lastName || ''} (${note.addedBy?.role || 'User'}) - ${formatDate(note.createdAt)}`}</Text>
                         {note.isPrivate && <Tag color="warning">Internal Private Note</Tag>}
                       </Space>
@@ -325,7 +332,7 @@ const TicketDetails = () => {
                 />
                 
                 {/* ADDED: Checkbox toggle for Admins */}
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                   <Button
                     type="primary"
                     onClick={handleAddNote}
@@ -364,7 +371,7 @@ const TicketDetails = () => {
                     Select other active tickets in the same category to link and clear them as duplicates of this ticket.
                   </Typography.Text>
                   
-                  <Space.Compact style={{ width: '100%', maxWidth: 600 }}>
+                  <Space.Compact direction={screens.sm ? 'horizontal' : 'vertical'} style={{ width: '100%', maxWidth: 600 }}>
                     <Select 
                       mode="multiple"
                       allowClear
@@ -375,7 +382,7 @@ const TicketDetails = () => {
                       value={selectedDuplicates}
                       onChange={setSelectedDuplicates} 
                       disabled={working} 
-                      style={{ width: '100%' }} 
+                      style={{ width: '100%', minWidth: 0 }}
                       options={duplicateOptions} 
                       virtual={false} 
                     />
@@ -395,7 +402,7 @@ const TicketDetails = () => {
           </Card>
         )}
       </Spin>
-    </AppLayout>
+    </>
   );
 };
 
