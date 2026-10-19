@@ -57,7 +57,9 @@ test('UPDATE1 archived dismissed reports remain reachable and appeal requires an
     return route.fulfill({ json: { ...archived, requests: [requestRecord({ type: 'appeal', message: 'The obstruction remains.' })], requestEligibility: { appeal: { allowed: false, reason: 'An appeal has already been submitted for this dismissal.' } } } });
   });
   await page.goto('/user/my-tickets');
-  await page.getByRole('radio', { name: 'Archived dismissed', exact: true }).check();
+  // Ant Design's button radios hide the native input; use its visible label.
+  await page.getByText('Archived dismissed', { exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Archived dismissed', exact: true })).toBeChecked();
   await expect(page).toHaveURL(/archived=dismissed/);
   await page.getByRole('button', { name: archived.title, exact: true }).click();
   await page.getByRole('button', { name: 'Appeal dismissal', exact: true }).click();
@@ -68,7 +70,7 @@ test('UPDATE1 archived dismissed reports remain reachable and appeal requires an
   await dialog.getByRole('button', { name: 'Submit appeal', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Request history', exact: true })).toContainText('The obstruction remains.');
-  await page.getByRole('button', { name: 'Back to tickets', exact: true }).click();
+  await page.getByRole('button', { name: /Back to tickets/ }).click();
   await expect(page).toHaveURL(/archived=dismissed/);
 });
 
@@ -212,6 +214,26 @@ test('UPDATE1 a failed staff response preserves the draft and a later explicit r
   expect(attempts).toBe(2);
 });
 
+test('UPDATE1 an empty refreshed Employee inbox revalidates and clears a revoked open request', async ({ page }) => {
+  await session(page, 'employee');
+  let viewed = false;
+  await page.route('**/api/tickets/requests*', route => route.fulfill({ json: {
+    items: viewed ? [] : [inboxItem()], total: viewed ? 0 : 1, page: 1, pages: 1,
+    counts: { outstanding: viewed ? 0 : 1, unread: viewed ? 0 : 1 },
+  } }));
+  await page.route(`**/api/tickets/${ticketId}/requests/${requestId}`, route => {
+    if (viewed) return route.fulfill({ status: 404, json: { message: 'Request not found' } });
+    viewed = true;
+    return route.fulfill({ json: report({ requests: [requestRecord()] }) });
+  });
+  await page.goto('/employee/action-center');
+  await page.getByRole('button', { name: 'Review request', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Request not found', { exact: true })).toBeVisible();
+  await expect(page.getByText('Please inspect the market.', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Public response', { exact: true })).toHaveCount(0);
+});
+
 test('UPDATE1 closing a pending review prevents its late response from restoring a request', async ({ page }) => {
   await session(page, 'employee');
   await page.route('**/api/tickets/requests*', route => route.fulfill({ json: { items: [inboxItem()], total: 1, page: 1, pages: 1, counts: { outstanding: 1, unread: 0 } } }));
@@ -265,6 +287,7 @@ for (const width of [320, 375]) {
     const bounds = await page.getByRole('dialog').boundingBox();
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    await page.getByRole('dialog').getByLabel('Public response', { exact: true }).focus();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });

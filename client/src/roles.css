@@ -75,6 +75,7 @@
 .request-response .request-message { margin-bottom: 0; }
 .request-pagination { display: flex; justify-content: flex-end; margin-top: 20px; }
 .request-review-record { margin: 20px 0; }
+.request-review-body { min-height: 160px; }
 .request-form { margin-top: 20px; }
 .request-form .ant-alert { margin-bottom: 16px; }
 .request-form-alert { margin: 16px 0; }

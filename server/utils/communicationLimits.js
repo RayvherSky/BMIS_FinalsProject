@@ -19,15 +19,19 @@ async function reserve(actor, now = new Date()) {
   const cutoff = new Date(now.getTime() - 600000);
   const kept = { $filter: { input: { $ifNull: ['$events', []] }, as: 'event', cond: { $gt: ['$$event.at', cutoff] } } };
   const entry = { _id: new mongoose.Types.ObjectId(), at: now };
+  // MongoDB forbids $expr in an upsert predicate. Create the empty bucket by
+  // its unique ID first, then reserve against the atomic capacity predicate.
   try {
-    const row = await Quota.findOneAndUpdate({ _id: actor.id, $expr: { $lt: [{ $size: kept }, maximum] } },
-      [{ $set: { events: { $concatArrays: [kept, [entry]] }, touchedAt: now } }], { new: true, upsert: true });
-    if (!row) throw new Error('Quota write was not acknowledged');
+    await Quota.updateOne({ _id: actor.id }, { $setOnInsert: { events: [], touchedAt: now } }, { upsert: true });
   } catch (error) {
     if (error.code !== 11000) throw error;
+  }
+  const row = await Quota.findOneAndUpdate({ _id: actor.id, $expr: { $lt: [{ $size: kept }, maximum] } },
+    [{ $set: { events: { $concatArrays: [kept, [entry]] }, touchedAt: now } }], { new: true });
+  if (!row) {
     const existing = await Quota.findById(actor.id).lean();
     const times = (existing?.events || []).filter(e => new Date(e.at) > cutoff).map(e => new Date(e.at).getTime()).sort((a, b) => a - b);
-    // A concurrent initial upsert can collide before the quota is full. Retry against the now-existing row.
+    // A TTL cleanup can remove an idle bucket between initialization and reservation.
     if (times.length < maximum) return reserve(actor, now);
     throw limited(new Date(times[times.length - maximum] + 600000), now);
   }

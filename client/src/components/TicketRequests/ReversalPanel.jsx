@@ -41,6 +41,7 @@ export default function ReversalPanel({ ticket, onUpdate, onAccessError, disable
       </div>}
     </li>)}</ol> : <Typography.Paragraph type="secondary">No recorded status changes. Older ticket history is not reconstructed.</Typography.Paragraph>}
     <Modal title="Revert Status" open={open} destroyOnClose onCancel={() => { if (!saving) setOpen(false); }} onOk={save} okText="Confirm reversal" confirmLoading={saving} okButtonProps={{ disabled: !reason.trim() || !options.includes(status) }} cancelButtonProps={{ disabled: saving }} closable={!saving} maskClosable={!saving}>
+      <Typography.Paragraph>Current status: <Typography.Text strong>{ticket.status}</Typography.Text></Typography.Paragraph>
       <Alert type="warning" showIcon message={ticket.reversal?.legacy ? 'Legacy correction — no earlier status was recorded.' : 'Restore the previous recorded status.'} description="A reason is required and retained in the Admin history. Reopening removes the current archive and completion markers while preserving their former values in history. An eligible assignee is retained." />
       {error && <Alert type="error" showIcon message={error} className="request-form-alert" />}
       <Form layout="vertical" className="request-form" onFinish={save}>

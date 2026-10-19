@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Ticket = require('../models/Ticket');
 const { withAccountLock, withTicketLock } = require('../utils/accountLock');
-const { populateTicket, serializeTicket, idOf } = require('../utils/ticketAccess');
+const { populateTicket, serializeTicket, idOf, canRead } = require('../utils/ticketAccess');
 const { TYPES, localDay, dismissalKey, eligibility, canHandle } = require('../utils/requestPolicy');
 const { problem, textInput, predicate, currentActor, reversalUpdate, sendProblem } = require('../utils/ticketLifecycle');
 const { reserve, checkNote, limited } = require('../utils/communicationLimits');
@@ -11,7 +11,15 @@ const withAccounts = (ids, work) => [...new Set(ids.filter(Boolean))].sort().red
 async function commit(ticket, update, extra = {}) {
   update.$inc = { ...update.$inc, workflowVersion: 1 };
   const saved = await Ticket.findOneAndUpdate(predicate(ticket, extra), update, { new: true, runValidators: true });
-  if (!saved) throw problem(409, 'The ticket changed before this action was saved. Refresh and try again.');
+  if (!saved) {
+    if (extra.assignedTo) {
+      const current = await Ticket.findById(ticket._id).select('assignedTo isArchived status');
+      if (!current || idOf(current.assignedTo) !== extra.assignedTo || current.isArchived || !['Pending', 'In Progress'].includes(current.status)) {
+        throw problem(404, 'Request not found');
+      }
+    }
+    throw problem(409, 'The ticket changed before this action was saved. Refresh and try again.');
+  }
   return saved;
 }
 async function withTicket(req, res, operation, lockAssignee = false) {
@@ -26,6 +34,11 @@ async function withTicket(req, res, operation, lockAssignee = false) {
       if (lockAssignee && (idOf(ticket.assignedTo) || null) !== (employee || null)) throw problem(409, 'Assignment changed. Refresh and retry.');
       const result = await operation(ticket, req.user, new Date());
       const updated = await populateTicket(Ticket.findById(ticket._id), req.user.role);
+      if (!updated || !canRead(updated, req.user)) throw problem(404, 'Ticket not found');
+      if (req.user.role === 'employee') {
+        const request = updated.requests.id(req.params.requestId);
+        if (!request || !canHandle(updated, request, req.user)) throw problem(404, 'Request not found');
+      }
       res.status(result || 200).json(serializeTicket(updated, req.user));
     }));
   } catch (error) { sendProblem(res, error); }
@@ -62,12 +75,13 @@ const handleRequest = (req, res) => withTicket(req, res, async (ticket, actor, n
   const action = req.body.action;
   if (!['view', 'acknowledge', 'respond', 'decide'].includes(action)) throw problem(400, 'Choose a valid handling action');
   const prefix = `requests.${ticket.requests.findIndex(r => String(r._id) === String(item._id))}`;
+  const guard = actor.role === 'employee' ? { assignedTo: actor.id, isArchived: { $ne: true } } : {};
   const update = { $set: {}, $push: {} };
   const seen = item.viewedBy.some(v => idOf(v.user) === actor.id);
   if (action === 'view') {
     if (seen) return;
     update.$push[`${prefix}.viewedBy`] = { user: actor.id, at: now };
-    await commit(ticket, update); return;
+    await commit(ticket, update, guard); return;
   }
   if (item.state === 'completed') throw problem(409, 'This request has already been completed.');
   if (action === 'acknowledge') {
@@ -95,7 +109,7 @@ const handleRequest = (req, res) => withTicket(req, res, async (ticket, actor, n
   update.$push[`${prefix}.history`] = { action, actor: actor.id, createdAt: now };
   const release = ['respond', 'decide'].includes(action) ? await reserve(actor, now) : null;
   try {
-    await commit(ticket, update, actor.role === 'employee' ? { assignedTo: actor.id, isArchived: { $ne: true } } : {});
+    await commit(ticket, update, guard);
   } catch (error) { if (release) await release(); throw error; }
 }, req.body.action === 'decide' && req.body.decision === 'accepted');
 

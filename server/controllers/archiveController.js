@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { populateTicket, serializeTicket, idOf } = require('../utils/ticketAccess');
 const { withAccountLock, withTicketLock } = require('../utils/accountLock');
 const escapeSearch = require('../utils/escapeSearch');
+const { predicate, problem, sendProblem } = require('../utils/ticketLifecycle');
 
 // @desc    Get all archived tickets
 // @route   GET /api/archive
@@ -41,6 +42,7 @@ const getArchivedTickets = async (req, res) => {
 // @access  Private (Admin)
 const archiveTicket = async (req, res) => {
   try {
+    await withTicketLock(req.params.id, async () => {
     const ticket = await Ticket.findById(req.params.id);
 
     if (!ticket) {
@@ -58,18 +60,19 @@ const archiveTicket = async (req, res) => {
       return res.status(400).json({ message: 'Ticket is already archived' });
     }
 
-    ticket.isArchived = true;
-    ticket.archivedAt = new Date();
-    await ticket.save();
+    const saved = await Ticket.findOneAndUpdate(predicate(ticket),
+      { $set: { isArchived: true, archivedAt: new Date() }, $inc: { workflowVersion: 1 } }, { new: true });
+    if (!saved) throw problem(409, 'Ticket changed. Refresh and retry archiving.');
 
     const archivedTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
 
     res.status(200).json(serializeTicket(archivedTicket, req.user));
+    });
   } catch (error) {
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Ticket not found' });
     }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    sendProblem(res, error);
   }
 };
 
@@ -90,19 +93,18 @@ const restoreTicket = async (req, res) => {
       if ((idOf(ticket.assignedTo) || null) !== employeeId) {
         return res.status(409).json({ message: 'Ticket assignment changed; refresh and retry restore' });
       }
+      const update = { $set: { isArchived: false, archivedAt: null }, $inc: { workflowVersion: 1 } };
       if (employeeId) {
         const employee = await User.findById(employeeId).select('role isActive');
         if (!employee || employee.role !== 'employee' || employee.isActive === false) {
-          ticket.assignmentHistory.push({ previousEmployee: employeeId, newEmployee: null,
+          update.$push = { assignmentHistory: { previousEmployee: employeeId, newEmployee: null,
             changedBy: req.user.id, createdAt: new Date(), action: 'unassigned',
-            reason: 'Restored report: previous Employee is unavailable' });
-          ticket.assignedTo = null;
-          ticket.assignedAt = null;
+            reason: 'Restored report: previous Employee is unavailable' } };
+          Object.assign(update.$set, { assignedTo: null, assignedAt: null });
         }
       }
-      ticket.isArchived = false;
-      ticket.archivedAt = null;
-      await ticket.save();
+      const saved = await Ticket.findOneAndUpdate(predicate(ticket), update, { new: true });
+      if (!saved) throw problem(409, 'Ticket changed. Refresh and retry restoration.');
       const restoredTicket = await populateTicket(Ticket.findById(ticket._id), 'admin');
       res.status(200).json(serializeTicket(restoredTicket, req.user));
     });
@@ -112,7 +114,7 @@ const restoreTicket = async (req, res) => {
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Ticket not found' });
     }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    sendProblem(res, error);
   }
 };
 

@@ -47,6 +47,7 @@ export default function TicketRequests({ ticket, onUpdate, onAccessError, disabl
     </div>}
     <RequestHistory requests={ticket.requests} />
     <Modal title={actions[requestType] || 'Ticket request'} open={!!open} destroyOnClose onCancel={() => { if (!saving) setOpen(null); }} onOk={submit} okText={isAppeal ? 'Submit appeal' : 'Send request'} confirmLoading={saving} okButtonProps={{ disabled: !allowed || (isAppeal && !text.trim()) }} cancelButtonProps={{ disabled: saving }} closable={!saving} maskClosable={!saving}>
+      <Typography.Paragraph className="request-message"><strong>{ticket.title}</strong><br />Ticket #{ticket._id}</Typography.Paragraph>
       {isAppeal && <Alert type="info" showIcon message="Your appeal uses the ticket’s existing evidence." description="Explain why the dismissal should be reviewed. An administrator will provide a public decision. No new attachments are needed." />}
       {error && <Alert type="error" showIcon message={error} className="request-form-alert" />}
       {!allowed && <Alert type="warning" message="This request is no longer available. Close this dialog and refresh the ticket details." className="request-form-alert" />}

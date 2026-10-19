@@ -47,6 +47,24 @@ async function fixture(t) {
     return report;
   });
   t.mock.method(Ticket.Query.prototype, 'exec', async function () {
+    if (this.op === 'findOneAndUpdate') {
+      // Model the conditional write used by lifecycle operations, preserving
+      // the original HTTP/state assertions rather than bypassing the predicate.
+      const matches = (report, filter) => Object.entries(filter).every(([key, value]) => {
+        if (key === '$and') return value.every(part => matches(report, part));
+        if (key === '$or') return value.some(part => matches(report, part));
+        if (value && typeof value === 'object' && '$ne' in value) return String(report[key]) !== String(value.$ne);
+        if (value && typeof value === 'object' && '$exists' in value) return (report[key] !== undefined) === value.$exists;
+        return String(report[key]) === String(value);
+      });
+      const report = [...reports.values()].find(row => matches(row, this.getFilter()));
+      if (!report) return null;
+      const update = this.getUpdate();
+      for (const [key, value] of Object.entries(update.$set || {})) report.set(key, value);
+      for (const [key, value] of Object.entries(update.$inc || {})) report.set(key, (report[key] || 0) + value);
+      for (const [key, value] of Object.entries(update.$push || {})) report[key].push(value);
+      return report;
+    }
     if (this.op === 'find') {
       const filter = this.getFilter();
       return [...reports.values()].filter(report => Object.entries(filter).every(([key, value]) => {

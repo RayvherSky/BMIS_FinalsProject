@@ -29,6 +29,8 @@ export default function ActionCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  const currentSelection = useRef(selected);
+  currentSelection.current = selected;
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [detailError, setDetailError] = useState('');
@@ -56,6 +58,21 @@ export default function ActionCenter() {
         if (currentIdentity.current !== identity || current !== listGeneration.current) return;
         if (data.pages > 0 && page > data.pages) { setPage(data.pages); return; }
         setResult(data);
+        const selection = currentSelection.current;
+        if (selection?.ticket && !data.items.some(item => item._id === selection.item._id)) {
+          // A filter/page change can hide a permitted request. Revalidate through
+          // the protected detail action instead of treating absence as access.
+          const selectionVersion = selectionGeneration.current;
+          try {
+            const ticket = await handleTicketRequest(selection.item.ticketId, selection.item._id, { action: 'view' });
+            if (currentIdentity.current !== identity || current !== listGeneration.current || selectionVersion !== selectionGeneration.current) return;
+            const request = ticket.requests?.find(record => record._id === selection.item._id);
+            if (request) setSelected({ item: selection.item, ticket, request });
+            else clearSelection();
+          } catch (failure) {
+            if (currentIdentity.current === identity && current === listGeneration.current && selectionVersion === selectionGeneration.current) handleFailure(failure);
+          }
+        }
       } catch (failure) {
         if (currentIdentity.current !== identity || current !== listGeneration.current) return;
         setResult(emptyResults); setError(requestErrorMessage(failure, 'Unable to load requests'));
@@ -154,6 +171,7 @@ export default function ActionCenter() {
     </Spin>
     <Modal title="Review request" open={!!selected} destroyOnClose onCancel={() => { if (!saving) clearSelection(); }} footer={<Button disabled={saving} onClick={clearSelection}>Close</Button>} closable={!saving} maskClosable={!saving} width={640}>
       <Spin spinning={detailLoading} tip="Loading request...">
+        <div className="request-review-body">
         {detailError && <Alert type="error" showIcon message={detailError} className="request-form-alert" />}
         {!detailLoading && !request && selected && <Button onClick={() => selectRequest(selected.item)}>Retry request</Button>}
         {request && <>
@@ -178,6 +196,7 @@ export default function ActionCenter() {
             </Form>}
           </>}
         </>}
+        </div>
       </Spin>
     </Modal>
   </section>;

@@ -169,6 +169,7 @@ test('revoked assignee cannot view, acknowledge or answer a request, and final t
   await status(t, 'Dismissed');
   assert.equal((await send('/tickets/requests', 'employee2')).body.total, 0);
   assert.equal((await send('/tickets/requests', 'admin')).body.total, 1);
+  assert.deepEqual((await send(pathOf(t), 'employee2')).body.requests, []);
 });
 test('appeals require an explanation, are Admin-only decisions, and reject repeated appeals for one dismissal', async () => {
   const t = await report({ status: 'Dismissed', isArchived: true, dismissedAt: new Date('2020-01-01') });
@@ -192,6 +193,7 @@ test('accepted appeal atomically records a public decision and audited reopening
   assert.equal(results.filter(r => r.status === 200).length, 1);
   let saved = await Ticket.findById(t._id);
   assert.equal(saved.status, 'In Progress'); assert.equal(saved.requests[0].decision, 'accepted');
+  assert.deepEqual((await send(pathOf(t), 'employee')).body.requests, []);
   assert.equal(saved.statusHistory.filter(h => h.kind === 'reversal').length, 1);
   await status(t, 'Dismissed');
   assert.equal((await request(t, 'appeal', 'This is a different dismissal.')).status, 201);
@@ -231,4 +233,72 @@ test('request input validation rejects malformed types, messages, queries and ID
   assert.equal((await send('/tickets/requests?page=-1', 'admin')).status, 400);
   const foreign = await request(t, 'follow_up', 'Secret', 'other');
   assert.equal(foreign.status, 404); assert.doesNotMatch(JSON.stringify(foreign.body), /Drainage report/);
+});
+
+test('archiving rejects a status change between its read and write instead of archiving an active report', async t => {
+  const row = await report({ status: 'Dismissed' });
+  const original = Ticket.Query.prototype.exec;
+  let changed = false;
+  t.mock.method(Ticket.Query.prototype, 'exec', async function (...args) {
+    const result = await original.apply(this, args);
+    if (!changed && this.op === 'findOne' && String(this.getFilter()._id) === String(row._id)) {
+      changed = true;
+      await Ticket.collection.updateOne({ _id: row._id }, { $set: { status: 'Pending' }, $inc: { workflowVersion: 1 } });
+    }
+    return result;
+  });
+  assert.equal((await send(`/archive/${row._id}/archive`, 'admin', {}, 'PUT')).status, 409);
+  const saved = await Ticket.findById(row._id);
+  assert.equal(saved.status, 'Pending'); assert.equal(saved.isArchived, false);
+});
+
+test('an Employee response denies revoked access at the database write without creating a note or completion', async t => {
+  const row = await report(); await assign(row);
+  const created = await request(row, 'progress_update'); const id = created.body.requests[0]._id;
+  const original = Ticket.findOneAndUpdate.bind(Ticket);
+  let changed = false;
+  t.mock.method(Ticket, 'findOneAndUpdate', async (...args) => {
+    if (!changed && args[1].$set?.['requests.0.state'] === 'completed') {
+      changed = true;
+      await Ticket.collection.updateOne({ _id: row._id }, { $set: { assignedTo: accounts.employee2._id }, $inc: { workflowVersion: 1 } });
+    }
+    return original(...args);
+  });
+  assert.equal((await handle(row, id, { action: 'respond', text: 'Must not be posted.' }, 'employee')).status, 404);
+  const saved = await Ticket.findById(row._id);
+  assert.equal(saved.requests[0].state, 'pending'); assert.equal(saved.notes.length, 0);
+});
+
+test('an obsolete appeal can be explicitly rejected after manual reopening without changing the current status', async () => {
+  const row = await report({ status: 'Dismissed' });
+  const created = await request(row, 'appeal', 'Please reconsider.'); const id = created.body.requests[0]._id;
+  await send(`${pathOf(row)}/revert`, 'admin', { status: 'Pending', reason: 'Administrative correction.' });
+  const result = await handle(row, id, { action: 'decide', decision: 'rejected', text: 'This appeal is superseded by the administrative reopening.' });
+  assert.equal(result.status, 200); assert.equal(result.body.status, 'Pending'); assert.equal(result.body.requests[0].state, 'completed');
+});
+
+test('concurrent requests across different tickets cannot exceed the account-wide quota', async () => {
+  const tickets = await Promise.all(Array.from({ length: 25 }, () => report()));
+  const results = await Promise.all(tickets.map(row => request(row, 'follow_up')));
+  assert.equal(results.filter(result => result.status === 201).length, 20);
+  assert.equal(results.filter(result => result.status === 429).length, 5);
+  assert.equal(await Ticket.countDocuments({ 'requests.0': { $exists: true } }), 20);
+});
+
+test('an Employee loses request response access if reassignment occurs during the final populated read', async t => {
+  const row = await report(); await assign(row);
+  const created = await request(row, 'progress_update'); const id = created.body.requests[0]._id;
+  await handle(row, id, { action: 'view' }, 'employee');
+  const original = Ticket.Query.prototype.exec;
+  let reads = 0;
+  t.mock.method(Ticket.Query.prototype, 'exec', async function (...args) {
+    if (this.op === 'findOne' && String(this.getFilter()._id) === String(row._id) && ++reads === 2) {
+      await Ticket.collection.updateOne({ _id: row._id }, { $set: { assignedTo: accounts.employee2._id },
+        $push: { notes: { _id: new mongoose.Types.ObjectId(), text: 'Private work after reassignment', isPrivate: true, addedBy: accounts.employee2._id, createdAt: new Date() } },
+        $inc: { workflowVersion: 1 } });
+    }
+    return original.apply(this, args);
+  });
+  const result = await handle(row, id, { action: 'view' }, 'employee');
+  assert.equal(result.status, 404); assert.doesNotMatch(JSON.stringify(result.body), /Private work after reassignment/);
 });

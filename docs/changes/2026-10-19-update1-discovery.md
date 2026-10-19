@@ -22,7 +22,7 @@ The requested `Context/BMIS session handoff.md` is not present. The current auth
 
 ## Owner decisions — all recommended defaults approved
 
-| # | Area | Recommendation requiring confirmation |
+| # | Area | Approved policy |
 |---|---|---|
 | 1 | Daily requests | Use calendar days in Asia/Manila. Allow at most one request of each applicable type per ticket per local day, and prevent another of the same type while an earlier one is unresolved. A completed request may be submitted again on a later day if the ticket is still eligible. Follow-up/update messages are optional; appeal explanations are required. |
 | 2 | Communication limits | For Users: 5 notes/minute per ticket and 20 communication submissions/10 minutes across tickets. For Admins/Employees: 20 notes/minute per ticket and 100 communication submissions/10 minutes across tickets. The account-wide quota includes notes, new requests, and request responses; a response written as a note is counted once. Suppress identical note text by the same author on the same ticket with the same visibility for 60 seconds. Return retry information for quota exhaustion. These are proposed configurable starting values, with higher staff capacity for case handling; no measured usage policy exists. |
@@ -32,7 +32,7 @@ The requested `Context/BMIS session handoff.md` is not present. The current auth
 | 6 | Handling and counts | Track viewing separately from handling. Offer explicit acknowledgement. A follow-up/update completes only through a public response linked to that request using a clear Send response and complete action; ordinary unrelated notes, internal notes, viewing, assignment and status changes do not silently complete it. Appeals complete through an Admin decision. Show distinct unread and outstanding counts. Load on navigation, refresh after mutations, and provide Refresh using the existing request/response pattern. |
 | 7 | Optional operator feature | Defer it for this update. Existing ticket conversations remain available. A later contact panel is the smallest compatible addition once the owner provides verified contact details and approves the scope. |
 
-Alternative daily policy: rolling 24 hours. Alternative reversal scope: choose among earlier recorded active statuses. Alternative appeal policy: owner-specified deadline/attempt limit. The implementation must follow the owner's answers rather than silently adopting this table.
+The owner selected every default in this table. Alternatives discussed during discovery (rolling 24 hours, broader historical restoration and other appeal limits) were not selected; the table is the approved policy.
 
 ## Proposed data and API design
 

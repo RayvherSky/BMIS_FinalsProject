@@ -1,5 +1,5 @@
 const { canonicalRole } = require('./roles');
-const { TYPES, eligibility, reversalOptions } = require('./requestPolicy');
+const { TYPES, eligibility, reversalOptions, canHandle } = require('./requestPolicy');
 const idOf = value => value?._id?.toString() || value?.toString();
 const staffName = value => value && ({ _id: value._id || value, ...(value.firstName !== undefined ? { firstName: value.firstName, lastName: value.lastName } : {}) });
 
@@ -37,7 +37,7 @@ function serializeTicket(document, actor) {
     // Eligibility needs the private dismissal event key; compute it before filtering requests.
     ticket.requestEligibility = Object.fromEntries(TYPES.map(type => [type, eligibility(document, type)]));
   }
-  ticket.requests = (ticket.requests || []).map(request => {
+  ticket.requests = (ticket.requests || []).filter(request => role !== 'employee' || canHandle(document, request, actor)).map(request => {
     const { viewedBy, history, handledBy, requestedBy, dismissalKey, day, ...publicRequest } = request;
     return publicRequest;
   });

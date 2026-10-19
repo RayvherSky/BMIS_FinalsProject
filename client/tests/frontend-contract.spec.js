@@ -127,7 +127,8 @@ test('REVAMP Employee workspace contains only operational navigation and assigne
   await expect(page.getByText('Assigned drainage inspection', { exact: true })).toBeVisible();
   await expect(page.getByText('Others (Drainage inspection)', { exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Primary navigation' });
-  await expect(navigation.getByRole('menuitem')).toHaveCount(2);
+  await expect(navigation.getByRole('menuitem')).toHaveCount(3);
+  await expect(navigation.getByRole('menuitem', { name: /Action Center/ })).toBeVisible();
   await expect(navigation.getByRole('menuitem', { name: /Archive|Users|Dashboard/ })).toHaveCount(0);
   await expect(page.locator('.role-employee')).toBeVisible();
 });
