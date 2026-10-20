@@ -8,6 +8,7 @@ function safeUser(document) {
   delete user.resetPasswordToken;
   delete user.resetPasswordExpires;
   delete user.demoProvisioningKey;
+  delete user.phoneNormalized;
   user.role = canonicalRole(user.role);
   user.isActive = user.isActive !== false;
   return user;

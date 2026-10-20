@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { testPhone } from './helpers/phone';
 
 const password = 'Password123!';
 const headers = account => ({ Authorization: `Bearer ${account.token}` });
@@ -8,7 +9,7 @@ async function manager(request) {
 }
 async function account(request, suffix) {
   const response = await request.post('/api/auth/register', { data: { firstName: 'Request', lastName: suffix,
-    email: `request-flow-${suffix}-${Date.now()}@example.test`, password } });
+    email: `request-flow-${suffix}-${Date.now()}@example.test`, password, phone: testPhone() } });
   expect(response.status()).toBe(201); return response.json();
 }
 async function report(request, owner, suffix) {

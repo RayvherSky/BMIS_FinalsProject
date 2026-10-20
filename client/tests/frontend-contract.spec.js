@@ -6,6 +6,7 @@ const resident = {
 };
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/tickets/reviews*', route => route.fulfill({ json: { items: [], total: 0, counts: { pending: 0, reviewed: 0 } } }));
   await page.addInitScript(() => localStorage.setItem('token', 'contract-test-token'));
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: resident }));
 });

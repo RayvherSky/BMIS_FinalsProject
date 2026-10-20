@@ -3,7 +3,8 @@ const { canonicalRole, safeUser } = require('../utils/roles');
 const { withAccountLock } = require('../utils/accountLock');
 const { clearAssignments } = require('../utils/assignmentLifecycle');
 const escapeSearch = require('../utils/escapeSearch');
-const { isValidOptionalPhone, PHONE_MESSAGE } = require('../utils/validatePhone');
+const { normalizePhone } = require('../utils/validatePhone');
+const { prepareContactUpdate, accountFailure } = require('../utils/accountContacts');
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -22,6 +23,7 @@ const getAllUsers = async (req, res) => {
         { firstName: { $regex: escapeSearch(search), $options: 'i' } },
         { lastName: { $regex: escapeSearch(search), $options: 'i' } },
         { email: { $regex: escapeSearch(search), $options: 'i' } },
+        { phone: { $regex: escapeSearch(search), $options: 'i' } },
       ];
     }
 
@@ -58,7 +60,7 @@ const getUserById = async (req, res) => {
 // @access  Private (Admin)
 const updateUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, address } = req.body;
+    const { firstName, lastName, address } = req.body;
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'isActive')) {
       return res.status(400).json({ message: 'Use the separate account status action' });
@@ -72,23 +74,12 @@ const updateUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (!isValidOptionalPhone(phone)) {
-      return res.status(400).json({ message: PHONE_MESSAGE });
-    }
-
-    // Check if email is being changed and if it's already taken
-    if (email && email.toLowerCase() !== user.email) {
-      const existingUser = await User.findOne({ email: email.toLowerCase() });
-      if (existingUser) {
-        return res.status(400).json({ message: 'Email already in use' });
-      }
-    }
+    const contacts = await prepareContactUpdate(user, req.body);
 
     // Update allowed fields
     if (firstName) user.firstName = firstName;
     if (lastName) user.lastName = lastName;
-    if (email) user.email = email;
-    if (phone !== undefined) user.phone = phone;
+    Object.assign(user, contacts);
     if (address !== undefined) user.address = address;
 
     // Use save with validateBeforeSave to skip password re-hashing
@@ -102,7 +93,7 @@ const updateUser = async (req, res) => {
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    accountFailure(res, error);
   }
 };
 
@@ -118,8 +109,8 @@ const changeUserRole = async (req, res) => {
     await withAccountLock(req.params.id, async () => {
       const user = await User.findById(req.params.id);
       if (!user) return res.status(404).json({ message: 'User not found' });
-      if (!confirmed(req.body.confirmationEmail, user)) {
-        return res.status(400).json({ message: 'Enter the account email to confirm this role change' });
+      if (!confirmed(req.body.confirmationIdentifier ?? req.body.confirmationEmail, user)) {
+        return res.status(400).json({ message: `Enter the account ${user.email ? 'email' : 'phone number'} to confirm this role change` });
       }
       if (user.role === 'employee' && role !== 'employee') {
         await clearAssignments(user._id, req.user.id, `Account role changed to ${role}`);
@@ -131,8 +122,11 @@ const changeUserRole = async (req, res) => {
   } catch (error) { accountError(res, error); }
 };
 
-function confirmed(email, user) {
-  return typeof email === 'string' && email.trim().toLowerCase() === user.email.toLowerCase();
+function confirmed(identifier, user) {
+  if (typeof identifier !== 'string') return false;
+  if (user.email) return identifier.trim().toLowerCase() === user.email.toLowerCase();
+  const phone = normalizePhone(user.phone);
+  return !!phone && normalizePhone(identifier) === phone;
 }
 function accountError(res, error) {
   if (error.kind === 'ObjectId') return res.status(404).json({ message: 'User not found' });
@@ -148,7 +142,7 @@ const changeUserActive = async (req, res) => {
     await withAccountLock(req.params.id, async () => {
       const user = await User.findById(req.params.id);
       if (!user) return res.status(404).json({ message: 'User not found' });
-      if (!confirmed(req.body.confirmationEmail, user)) return res.status(400).json({ message: 'Enter the account email to confirm this status change' });
+      if (!confirmed(req.body.confirmationIdentifier ?? req.body.confirmationEmail, user)) return res.status(400).json({ message: `Enter the account ${user.email ? 'email' : 'phone number'} to confirm this status change` });
       if (!req.body.isActive) await clearAssignments(user._id, req.user.id, 'Account deactivated');
       user.isActive = req.body.isActive;
       await user.save();
@@ -160,8 +154,8 @@ const changeUserActive = async (req, res) => {
 const getEmployees = async (req, res) => {
   try {
     const users = await User.find({ role: 'employee', isActive: { $ne: false } })
-      .select('_id firstName lastName email').sort({ firstName: 1, lastName: 1 });
-    res.status(200).json(users.map(user => ({ _id: user._id, firstName: user.firstName, lastName: user.lastName, name: `${user.firstName} ${user.lastName}`, email: user.email })));
+      .select('_id firstName lastName email phone').sort({ firstName: 1, lastName: 1 });
+    res.status(200).json(users.map(user => ({ _id: user._id, firstName: user.firstName, lastName: user.lastName, name: `${user.firstName} ${user.lastName}`, email: user.email, phone: user.phone })));
   } catch (error) { accountError(res, error); }
 };
 

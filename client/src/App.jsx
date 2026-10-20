@@ -8,6 +8,7 @@ import AppLayout from './components/Layout/AppLayout';
 import LegacyUserRedirect from './components/ProtectedRoute/LegacyUserRedirect';
 import EmployeeQueue from './pages/EmployeeQueue';
 import ActionCenter from './pages/ActionCenter';
+import ReviewQueue from './pages/ReviewQueue';
 import './roles.css';
 
 import Login from './pages/Login';
@@ -96,6 +97,7 @@ function App() {
                 <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
                   <Route path="/admin/dashboard" element={<AdminDashboard />} />
                   <Route path="/admin/action-center" element={<ActionCenter />} />
+                  <Route path="/admin/for-review" element={<ReviewQueue />} />
                   <Route path="/admin/ticket/:id" element={<TicketDetails />} />
                   <Route path="/admin/users" element={<UserManagement />} />
                   <Route path="/admin/archive" element={<ArchiveView />} />

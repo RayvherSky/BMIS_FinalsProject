@@ -4,9 +4,12 @@ import { UploadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { createTicket } from '../api/ticketApi';
 import { CATEGORIES } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
+import { phoneRules } from '../utils/phone';
 
 const SubmitTicket = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fileList, setFileList] = useState([]);
   const [isCustomCategory, setIsCustomCategory] = useState(false); // Tracks if "Others" is selected
@@ -54,7 +57,8 @@ const SubmitTicket = () => {
       <div className="user-page-intro"><span className="workspace-eyebrow">LET US KNOW</span><h1 className="page-title">Report an Incident</h1><p>Share the details and an optional photo. You can follow every public update in My Tickets.</p></div>
       <Card className="report-form-card" style={{ maxWidth: 860 }}>
         <Spin spinning={loading}>
-          <Form layout="vertical" onFinish={submit} disabled={loading}>
+          <Form layout="vertical" onFinish={submit} disabled={loading} initialValues={{ contactNumber: user.phone || '' }}>
+            <Form.Item name="contactNumber" label="Contact Number" rules={[{ required: true, whitespace: true, message: 'Please enter a contact number' }, ...phoneRules]} extra="Use 09XXXXXXXXX or +639XXXXXXXXX. Staff will use this number for your report."><Input type="tel" autoComplete="tel" /></Form.Item>
             <Form.Item name="title" label="Title" rules={[{ required: true, whitespace: true, message: 'Please enter a title' }]}><Input placeholder="Briefly describe the issue" /></Form.Item>
             <Form.Item name="description" label="Description" rules={[{ required: true, whitespace: true, message: 'Please describe the incident' }]}><Input.TextArea rows={4} placeholder="Describe what happened and who is affected" /></Form.Item>
             

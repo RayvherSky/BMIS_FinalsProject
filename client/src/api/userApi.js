@@ -15,11 +15,11 @@ export const updateUser = async (id, data) => {
   return response.data;
 };
 
-export const changeUserRole = async (id, role, confirmationEmail) => {
-  const response = await api.patch(`/api/users/${id}/role`, { role, confirmationEmail });
+export const changeUserRole = async (id, role, confirmationIdentifier) => {
+  const response = await api.patch(`/api/users/${id}/role`, { role, confirmationIdentifier });
   return response.data;
 };
 
 export const getEmployees = async () => (await api.get('/api/users/employees')).data;
-export const setUserActive = async (id, isActive, confirmationEmail) =>
-  (await api.patch(`/api/users/${id}/active`, { isActive, confirmationEmail })).data;
+export const setUserActive = async (id, isActive, confirmationIdentifier) =>
+  (await api.patch(`/api/users/${id}/active`, { isActive, confirmationIdentifier })).data;

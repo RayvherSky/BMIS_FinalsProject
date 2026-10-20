@@ -19,7 +19,7 @@ const Login = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      await login(values.email, values.password);
+      await login(values.identifier, values.password);
     } finally {
       setLoading(false);
     }
@@ -63,18 +63,16 @@ const Login = () => {
               requiredMark={false}
             >
               <Form.Item
-                name="email"
-                label="Email Address"
+                name="identifier"
+                label="Phone Number or Email"
                 rules={[
-                  { required: true, message: 'Please enter your email' },
-                  { type: 'email', message: 'Please enter a valid email' },
+                  { required: true, whitespace: true, message: 'Please enter your phone number or email' },
                 ]}
               >
                 <Input
                   prefix={<MailOutlined aria-hidden="true" />}
-                  placeholder="Email Address"
+                  placeholder="Phone Number or Email"
                   autoComplete="username"
-                  inputMode="email"
                   autoCapitalize="none"
                   spellCheck={false}
                 />

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Avatar, Button, Card, Descriptions, Form, Input, Modal, Spin, Tag, message } from 'antd';
 import { useAuth } from '../context/AuthContext';
-import { PHONE_HELP, phoneRulesFor } from '../utils/phone';
+import { PHONE_HELP, REQUIRED_PHONE_HELP, normalizePhone, phoneRulesFor } from '../utils/phone';
 import { getRoleLabel } from '../utils/roles';
 
 const Profile = () => {
@@ -42,7 +42,7 @@ const Profile = () => {
         {user.role !== 'admin' && <div className="profile-summary"><Avatar size={56} style={{ background: '#0A4D68' }}>{user.firstName?.[0]}{user.lastName?.[0]}</Avatar><div><strong>{user.firstName} {user.lastName}</strong><span>{getRoleLabel(user.role)} account · Barangay Baclaran</span></div></div>}
         <Descriptions bordered column={{ xs: 1, sm: 1, md: 2 }} items={[
           { key: 'name', label: 'Name', children: `${user.firstName} ${user.lastName}` },
-          { key: 'email', label: 'Email', children: user.email },
+          { key: 'email', label: 'Email', children: user.email || 'Not provided' },
           { key: 'role', label: 'Role', children: <Tag color={user.role === 'admin' ? 'blue' : 'green'}>{getRoleLabel(user.role)}</Tag> },
           { key: 'phone', label: 'Phone', children: user.phone || 'Not provided' },
           { key: 'address', label: 'Address', children: user.address || 'Not provided', span: 2 },
@@ -53,7 +53,7 @@ const Profile = () => {
           <Form form={form} layout="vertical" onFinish={saveProfile}>
             <Form.Item name="firstName" label="First Name" rules={[{ required: true, whitespace: true, message: 'Please enter your first name' }]}><Input /></Form.Item>
             <Form.Item name="lastName" label="Last Name" rules={[{ required: true, whitespace: true, message: 'Please enter your last name' }]}><Input /></Form.Item>
-            <Form.Item name="phone" label="Phone" rules={phoneRulesFor(user.phone)} extra={PHONE_HELP}><Input type="tel" autoComplete="tel" /></Form.Item>
+            <Form.Item name="phone" label="Phone" rules={phoneRulesFor(user.phone)} extra={normalizePhone(user.phone) ? REQUIRED_PHONE_HELP : PHONE_HELP}><Input type="tel" autoComplete="tel" /></Form.Item>
             <Form.Item name="address" label="Address"><Input /></Form.Item>
             <Form.Item name="password" label="New Password" extra="Leave blank to keep your current password." rules={[{ min: 6, message: 'Password must be at least 6 characters' }]}><Input.Password autoComplete="new-password" /></Form.Item>
             <Button type="primary" htmlType="submit" loading={saving}>Save Changes</Button>

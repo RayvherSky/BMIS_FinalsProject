@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Layout, Menu, Dropdown, Button, Avatar, Typography, Space } from 'antd';
+import { Layout, Menu, Dropdown, Button, Avatar, Typography, Space, Badge } from 'antd';
 import {
   DashboardOutlined,
   PlusCircleOutlined,
@@ -7,6 +7,7 @@ import {
   TeamOutlined,
   InboxOutlined,
   BellOutlined,
+  AuditOutlined,
   UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -17,6 +18,8 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleLabel, normalizeRole } from '../../utils/roles';
 import barangaySeal from '../../assets/Barangay_Logo.png';
+import useReviewCount from '../TicketReview/useReviewCount';
+import '../TicketReview/TicketReview.css';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -36,12 +39,18 @@ const AppLayout = () => {
 
   const role = normalizeRole(user?.role);
   const isAdmin = role === 'admin';
+  const pendingReviews = useReviewCount(isAdmin, user?._id, location.pathname);
 
   const adminMenuItems = [
     {
       key: '/admin/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
+    },
+    {
+      key: '/admin/for-review',
+      icon: <AuditOutlined />,
+      label: <span className="review-menu-label"><span>For Review</span>{pendingReviews !== null && <Badge count={pendingReviews} overflowCount={99} showZero title={`${pendingReviews} pending Employee reviews`} aria-label={`${pendingReviews} pending Employee reviews`} />}</span>,
     },
     {
       key: '/admin/action-center',
@@ -101,6 +110,7 @@ const AppLayout = () => {
     // Check for exact matches first
     const exactMatch = menuItems.find((item) => item.key === path);
     if (exactMatch) return [exactMatch.key];
+    if (isAdmin && location.state?.fromReview) return ['/admin/for-review'];
     if (location.state?.fromActionCenter && (isAdmin || role === 'employee')) return [`/${role}/action-center`];
 
     // Check for prefix matches (e.g., /admin/ticket/:id -> /admin/dashboard)

@@ -9,6 +9,7 @@ const report = (overrides = {}) => ({ _id: ticketId, title: 'Market drainage rep
 const inboxItem = (overrides = {}) => ({ ...requestRecord(), ticketId, title: 'Market drainage report', ticketStatus: 'Pending', isArchived: false, requester: owner, read: false, ...overrides });
 
 async function session(page, role = 'user') {
+  await page.route('**/api/tickets/reviews*', route => route.fulfill({ json: { items: [], total: 0, counts: { pending: 0, reviewed: 0 } } }));
   await page.addInitScript(() => localStorage.setItem('token', 'update1-contract-token'));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { ...owner, role } }));
   await page.route(url => url.pathname === '/api/tickets', route => route.fulfill({ json: [] }));
@@ -39,6 +40,7 @@ test('UPDATE1 User request uses server eligibility, preserves a rate-limited dra
   await expect(dialog.getByText(/Communication limit reached/)).toBeVisible();
   await expect(dialog.getByText(/30 seconds/)).toBeVisible();
   await expect(dialog.getByLabel('Message (optional)', { exact: true })).toHaveValue('Please inspect the market.');
+  await expect(dialog.getByRole('button', { name: 'Send request', exact: true })).toHaveAttribute('aria-busy', 'false');
   await dialog.getByRole('button', { name: 'Send request', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Request follow-up', exact: true })).toBeDisabled();
@@ -121,6 +123,7 @@ test('UPDATE1 Employee viewing, acknowledgement and public completion remain dis
   await dialog.getByRole('button', { name: 'Acknowledge', exact: true }).click();
   await expect(dialog.getByText('Acknowledged', { exact: true })).toBeVisible();
   const complete = dialog.getByRole('button', { name: 'Send response and complete', exact: true });
+  await expect(complete).toHaveAttribute('aria-busy', 'false');
   await expect(complete).toBeDisabled();
   await dialog.getByLabel('Public response', { exact: true }).fill('Inspection is scheduled tomorrow.');
   await complete.click();
@@ -209,6 +212,7 @@ test('UPDATE1 a failed staff response preserves the draft and a later explicit r
   await dialog.getByRole('button', { name: 'Send response and complete', exact: true }).click();
   await expect(dialog.getByText('Request changed. Please review before retrying.', { exact: true })).toBeVisible();
   await expect(dialog.getByLabel('Public response', { exact: true })).toHaveValue('Inspection is scheduled tomorrow.');
+  await expect(dialog.getByRole('button', { name: 'Send response and complete', exact: true })).toHaveAttribute('aria-busy', 'false');
   await dialog.getByRole('button', { name: 'Send response and complete', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(attempts).toBe(2);

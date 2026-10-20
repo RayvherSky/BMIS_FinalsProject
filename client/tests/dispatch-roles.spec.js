@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { testPhone } from './helpers/phone';
 
 const password = 'Password123!';
 const managerEmail = 'maria.santos@email.com';
@@ -12,7 +13,7 @@ async function session(request, email) {
 }
 async function registerEmployee(request, manager, suffix) {
   const email = `dispatch-browser-${suffix}-${Date.now()}@example.com`;
-  const response = await request.post('/api/auth/register', { data: { firstName: 'Dispatch', lastName: suffix, email, password } });
+  const response = await request.post('/api/auth/register', { data: { firstName: 'Dispatch', lastName: suffix, email, password, phone: testPhone() } });
   expect(response.status()).toBe(201);
   const account = await response.json();
   expect(account.user.role).toBe('user');
@@ -59,7 +60,7 @@ test('DISPATCH Admin assigns from the UI, Employee posts updates, and User sees 
   await expect(page.getByRole('button', { name: 'Mark Resolved', exact: true })).toBeVisible();
   await page.evaluate(() => localStorage.clear());
   await page.goto('/login');
-  await page.getByPlaceholder('Email Address', { exact: true }).fill(employee.user.email);
+  await page.getByPlaceholder('Phone Number or Email', { exact: true }).fill(employee.user.email);
   await page.getByPlaceholder('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Login', exact: true }).click();
   await expect(page).toHaveURL(/\/employee\/assigned-tickets$/);
@@ -117,6 +118,7 @@ test('DISPATCH reassignment and unassignment immediately change Employee access 
   await page.getByRole('button', { name: /Refresh assignments$/, exact: false }).click();
   await expect(page.getByText(ticket.title, { exact: true })).toHaveCount(0);
   await assign(request, manager, ticket, second);
+  expect((await request.post(`/api/tickets/${ticket._id}/review`, { headers: headers(second), data: {} })).status()).toBe(201);
   const resolved = await request.put(`/api/tickets/${ticket._id}/status`, { headers: headers(manager), data: { status: 'Resolved' } });
   expect((await resolved.json()).isArchived).toBe(true);
   expect((await request.get(`/api/tickets/${ticket._id}`, { headers: headers(second) })).status()).toBe(403);
@@ -132,7 +134,7 @@ test('DISPATCH Admin deactivates, reactivates and demotes an Employee with confi
   const ticket = await incident(request, owner, 'Dispatch browser account lifecycle report');
   await assign(request, manager, ticket, employee);
   await openAs(page, manager, '/admin/users');
-  const search = page.getByPlaceholder('Search users by name or email');
+  const search = page.getByPlaceholder('Search users by name, email or phone');
   await search.fill(employee.user.email); await search.press('Enter');
   const row = page.getByRole('row').filter({ hasText: employee.user.email });
   await row.getByRole('button', { name: 'Deactivate', exact: true }).click();

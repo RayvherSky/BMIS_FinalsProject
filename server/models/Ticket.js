@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { historySchema, requestSchema } = require('./ticketWorkflowSchemas');
+const { reviewSchema, reviewHistorySchema } = require('./ticketReviewSchemas');
 
 const ticketSchema = new mongoose.Schema(
   {
@@ -38,6 +39,9 @@ const ticketSchema = new mongoose.Schema(
     workflowVersion: { type: Number, default: 0 },
     statusHistory: [historySchema],
     requests: [requestSchema],
+    review: { type: reviewSchema, default: undefined },
+    reviewHistory: [reviewHistorySchema],
+    contactNumber: { type: String, match: /^09\d{9}$/ },
     priority: {
       type: String,
       enum: ["Low", "Medium", "High", "Urgent"],

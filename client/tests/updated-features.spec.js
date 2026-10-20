@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { testPhone } from './helpers/phone';
 
 // Regression coverage for the October updates and their audit repairs.
 // Historical failures are recorded in docs/system-audit-2026-10-18.md.
@@ -287,12 +288,12 @@ test('UPD-09 empty analytics data shows zero totals without invalid charts', asy
   await page.route(url => url.pathname === '/api/archive', route => route.fulfill({ json: [] }));
   await page.route('**/api/tickets*', route => route.fulfill({ json: [] }));
   await openAs(page, admin, '/admin/dashboard');
-  await expect(page.locator('.ant-statistic-content-value')).toHaveText(['0', '0', '0', '0', '0', '0']);
+  await expect(page.locator('.ant-statistic-content-value')).toHaveText(['0', '0', '0', '0', '0']);
   await expect(page.getByText('System Analytics', { exact: true })).toHaveCount(0);
   await expect(page.locator('.ant-empty-description')).toContainText('No data');
 });
 
-test('AUD-06 invalid optional phone numbers must be rejected during registration', async ({ request }) => {
+test('AUD-06 invalid required phone numbers must be rejected during registration', async ({ request }) => {
   for (const [index, phone] of ['not-a-phone-number', '08171234567', '0917123456', '091712345678', '639171234567', null, 9171234567].entries()) {
     const response = await request.post('/api/auth/register', { data: {
       firstName: 'Audit', lastName: 'Phone', email: `audit-invalid-phone-${Date.now()}-${index}@example.com`,
@@ -303,21 +304,23 @@ test('AUD-06 invalid optional phone numbers must be rejected during registration
   }
 });
 
-test('AUD-06 registration accepts blank values and agreed mobile formats', async ({ request }) => {
-  for (const [index, phone] of [undefined, '', '   ', '09171234567', '+639171234567', '0917 123 4567', '+63 917-123-4567'].entries()) {
+test('AUD-06 registration rejects blanks and accepts distinct identities in agreed mobile formats', async ({ request }) => {
+  const formatted = [testPhone(), `+63${testPhone().slice(1)}`, testPhone().replace(/^(\d{4})(\d{3})(\d{4})$/, '$1 $2 $3'), `+63 ${testPhone().slice(1).replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')}`];
+  for (const [index, phone] of [undefined, '', '   ', ...formatted].entries()) {
     const response = await request.post('/api/auth/register', { data: {
       firstName: 'Audit', lastName: 'Mobile', email: `audit-valid-phone-${Date.now()}-${index}@example.com`,
       password: PASSWORD, phone,
     } });
-    expect(response.status()).toBe(201);
-    expect((await response.json()).user.phone).toBe(phone || '');
+    expect(response.status()).toBe(index < 3 ? 400 : 201);
+    if (index >= 3) expect((await response.json()).user.phone).toBe(`0${phone.replace(/[ -]/g, '').replace(/^\+63|^0/, '')}`);
   }
 });
 
 test('AUD-06 profile and admin writes validate phone before modifying contact data', async ({ request }) => {
   const admin = await session(request);
+  const mobile = testPhone();
   const created = await request.post('/api/auth/register', { data: {
-    firstName: 'Audit', lastName: 'Contact', email: `audit-contact-${Date.now()}@example.com`, password: PASSWORD, phone: '09171234567', address: 'Original address',
+    firstName: 'Audit', lastName: 'Contact', email: `audit-contact-${Date.now()}@example.com`, password: PASSWORD, phone: mobile, address: 'Original address',
   } });
   expect(created.status()).toBe(201);
   const account = await created.json();
@@ -326,13 +329,14 @@ test('AUD-06 profile and admin writes validate phone before modifying contact da
     const invalid = await request.put(path, { headers: auth, data: { phone: 'invalid-contact', address: 'Unwanted change' } });
     expect(invalid.status()).toBe(400);
     const saved = await (await request.get('/api/auth/me', { headers })).json();
-    expect(saved).toMatchObject({ phone: '09171234567', address: 'Original address' });
-    for (const phone of ['+63 917-123-4567', '', '09171234567']) {
+    expect(saved).toMatchObject({ phone: mobile, address: 'Original address' });
+    for (const phone of [`+63 ${mobile.slice(1)}`, mobile]) {
       const accepted = await request.put(path, { headers: auth, data: { phone } });
       expect(accepted.status()).toBe(200);
       const current = await (await request.get('/api/auth/me', { headers })).json();
-      expect(current.phone).toBe(phone);
+      expect(current.phone).toBe(mobile);
     }
+    expect((await request.put(path, { headers: auth, data: { phone: '' } })).status()).toBe(400);
   }
 });
 
@@ -343,12 +347,12 @@ test('AUD-06 registration form blocks an invalid phone and accepts the corrected
   await page.getByPlaceholder('Email Address', { exact: true }).fill(`audit-form-phone-${Date.now()}@example.com`);
   await page.getByPlaceholder('Password', { exact: true }).fill(PASSWORD);
   await page.getByPlaceholder('Confirm Password', { exact: true }).fill(PASSWORD);
-  const phone = page.getByPlaceholder('Phone Number (optional)', { exact: true });
+  const phone = page.getByPlaceholder('Phone Number', { exact: true });
   await phone.fill('not-a-phone-number');
   await page.getByRole('button', { name: 'Register', exact: true }).click();
   await expect(page.locator('.ant-form-item-explain-error')).toContainText('09XXXXXXXXX or +639XXXXXXXXX');
   await expect(page).toHaveURL(/\/register$/);
-  await phone.fill('+63 917-123-4567');
+  await phone.fill(`+63 ${testPhone().slice(1)}`);
   const registered = page.waitForResponse(response => response.url().endsWith('/api/auth/register') && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Register', exact: true }).click();
   expect((await registered).status()).toBe(201);
@@ -411,6 +415,7 @@ test(`AUD-07 a late ${action} ${delayedFetch} refresh cannot overwrite the newly
   const d = { ...common, _id: 'audit-d', title: 'Audit Ticket D', linkedTicket: null };
   await page.addInitScript(() => localStorage.setItem('token', 'audit-controlled-token'));
   await page.route('**/api/auth/me', route => route.fulfill({ json: admin }));
+  await page.route('**/api/tickets/reviews*', route => route.fulfill({ json: { items: [], total: 0, counts: { pending: 0, reviewed: 0 } } }));
   await page.route('**/api/tickets/audit-b', route => route.fulfill({ json: b }));
   let mutated = false;
   let held = false;

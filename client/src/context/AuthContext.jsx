@@ -44,9 +44,9 @@ export const AuthProvider = ({ children }) => {
     validateToken();
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (identifier, password) => {
     try {
-      const response = await api.post('/api/auth/login', { email, password });
+      const response = await api.post('/api/auth/login', { identifier, password });
       const { token: newToken, user: userData } = response.data;
       const account = normalizeAccount(userData);
       localStorage.setItem('token', newToken);

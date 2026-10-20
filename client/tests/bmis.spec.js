@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { testPhone } from './helpers/phone';
 import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +28,7 @@ async function authenticate(request, email = ADMIN, password = PASSWORD) {
 
 async function login(page, email = RESIDENT, password = PASSWORD) {
   await page.goto('/login');
-  await page.getByPlaceholder('Email Address', { exact: true }).fill(email);
+  await page.getByPlaceholder('Phone Number or Email', { exact: true }).fill(email);
   await page.getByPlaceholder('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Login', exact: true }).click();
   await expect(page).toHaveURL(email === ADMIN ? /\/admin\/dashboard$/ : /\/user\/dashboard$/);
@@ -224,8 +225,8 @@ test('admin edits contact details separately from a confirmed role change', asyn
   try {
   await login(page, ADMIN);
   await page.goto('/admin/users');
-  await page.getByPlaceholder('Search users by name or email').fill('pedro.garcia@email.com');
-  await page.getByPlaceholder('Search users by name or email').press('Enter');
+  await page.getByPlaceholder('Search users by name, email or phone').fill('pedro.garcia@email.com');
+  await page.getByPlaceholder('Search users by name, email or phone').press('Enter');
   const row = page.getByRole('row').filter({ hasText: 'pedro.garcia@email.com' });
   await expect(row).toBeVisible();
   await row.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -254,8 +255,8 @@ test('admin edits contact details separately from a confirmed role change', asyn
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(row).toContainText('Admin');
   await page.reload();
-  await page.getByPlaceholder('Search users by name or email').fill(pedro.email);
-  await page.getByPlaceholder('Search users by name or email').press('Enter');
+  await page.getByPlaceholder('Search users by name, email or phone').fill(pedro.email);
+  await page.getByPlaceholder('Search users by name, email or phone').press('Enter');
   await expect(row).toContainText('Admin');
   await expect(row).toContainText('09209998877');
   } finally {
@@ -286,7 +287,7 @@ test('role routes and ticket ownership are enforced and missing tickets are hand
 
 test('password recovery resets once and invalidates the old password', async ({ page, request }) => {
   await page.goto('/forgot-password');
-  await page.getByPlaceholder('Email Address', { exact: true }).fill('rosa.martinez@email.com');
+  await page.getByPlaceholder('Phone Number or Email', { exact: true }).fill('rosa.martinez@email.com');
   const resetResponse = page.waitForResponse((response) => response.url().endsWith('/api/auth/forgot-password'));
   await page.getByRole('button', { name: 'Send Reset Link' }).click();
   const { resetToken } = await (await resetResponse).json();
@@ -359,6 +360,7 @@ test('registration creates a User and logout removes access', async ({ page }) =
   await page.getByPlaceholder('First Name', { exact: true }).fill('Luz');
   await page.getByPlaceholder('Last Name', { exact: true }).fill('Mendoza');
   await page.getByPlaceholder('Email Address', { exact: true }).fill('luz.acceptance@example.com');
+  await page.getByPlaceholder('Phone Number', { exact: true }).fill(testPhone());
   await page.getByPlaceholder('Password', { exact: true }).fill(PASSWORD);
   await page.getByPlaceholder('Confirm Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Register', exact: true }).click();

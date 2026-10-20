@@ -16,7 +16,7 @@ const ForgotPassword = () => {
     setError(null);
     try {
       const response = await api.post('/api/auth/forgot-password', {
-        email: values.email,
+        identifier: values.identifier,
       });
       setResetInfo(response.data);
     } catch (err) {
@@ -36,7 +36,7 @@ const ForgotPassword = () => {
             <SafetyCertificateOutlined />
           </div>
           <h2>Forgot Password</h2>
-          <p>Enter your email to receive a reset link</p>
+          <p>Enter your phone number or email to generate a reset link</p>
         </div>
 
         {resetInfo ? (
@@ -44,7 +44,7 @@ const ForgotPassword = () => {
             <Result
               status="success"
               title="Reset Link Generated"
-              subTitle="In production, this link would be sent to your email."
+              subTitle="This local demo displays your reset link here."
             />
             <Alert
               type="info"
@@ -57,8 +57,7 @@ const ForgotPassword = () => {
                       `${window.location.origin}/reset-password/${resetInfo.resetToken || resetInfo.token}`}
                   </Paragraph>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    This link is displayed here for demo purposes only. In a production
-                    environment, it would be sent via email.
+                    This link is displayed here for demo purposes only. No email or SMS is sent.
                   </Text>
                 </div>
               }
@@ -90,15 +89,14 @@ const ForgotPassword = () => {
               size="large"
             >
               <Form.Item
-                name="email"
+                name="identifier"
                 rules={[
-                  { required: true, message: 'Please enter your email' },
-                  { type: 'email', message: 'Please enter a valid email' },
+                  { required: true, whitespace: true, message: 'Please enter your phone number or email' },
                 ]}
               >
                 <Input
                   prefix={<MailOutlined style={{ color: '#0A4D68' }} />}
-                  placeholder="Email Address"
+                  placeholder="Phone Number or Email"
                 />
               </Form.Item>
 

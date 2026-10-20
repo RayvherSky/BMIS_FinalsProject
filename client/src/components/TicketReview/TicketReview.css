@@ -1,0 +1,17 @@
+.ticket-review-panel { margin: 24px 0; padding: 18px; border: 1px solid #dce7e2; border-radius: 8px; background: #f7faf8; }
+.ticket-review-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.ticket-review-heading h5.ant-typography { margin: 0; }
+.ticket-review-metadata { margin-top: 10px; color: #647579; font-size: 12px; overflow-wrap: anywhere; }
+.ticket-review-explanation.ant-typography { margin: 12px 0 0; }
+.ticket-review-panel .ant-alert { margin-top: 12px; }
+.review-menu-label { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+.review-queue { max-width: 1200px; margin: 0 auto; min-width: 0; }
+.review-queue-controls { margin-bottom: 18px; max-width: 480px; }
+.review-queue-list { display: grid; gap: 14px; }
+.review-queue-card { border-color: #dce7e2; border-radius: 10px; min-width: 0; }
+.review-queue-card h2 { color: #0a4d68; font-size: 18px; margin: 12px 0; overflow-wrap: anywhere; }
+.review-queue-pagination { display: flex; justify-content: flex-end; margin-top: 20px; }
+@media (max-width: 575px) {
+  .ticket-review-heading > .ant-btn { width: 100%; }
+  .ticket-review-panel, .review-queue-card .ant-card-body { padding: 14px; }
+}

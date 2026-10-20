@@ -1,89 +1,174 @@
 # BMIS — Barangay Baclaran
 
-A localhost MERN application for reporting and tracking non-emergency incidents in Barangay Baclaran, Parañaque City. Residents submit reports and view their own tickets. Administrators manage users, process tickets, link duplicates, and archive or restore completed reports.
+A localhost MERN application for reporting and tracking non-emergency incidents and hazards in Barangay Baclaran, Parañaque City. Users submit reports, Employees work on assignments, and Admins coordinate triage, review, resolution, accounts and archives.
 
-## Requirements
+## Stack
 
-- Node.js 20.19 or newer and npm. Development was verified with Node.js 24.
-- MongoDB, either an existing local installation or the optional launcher included here.
-- Google Chrome for the browser tests. Alternatively install Playwright Chromium and set `PLAYWRIGHT_CHANNEL=chromium`.
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React 18, Vite 5, Ant Design 5, React Router 6, Axios, Day.js |
+| Backend | Node.js, Express 4, Mongoose 8 |
+| Database | MongoDB |
+| Authentication / evidence | JWT, bcrypt password hashes, Multer, local image uploads |
+| Testing | Node test runner, isolated MongoDB instances, Playwright |
 
-## Setup
+## Roles and features
 
-Install both applications from the project directory:
+**User:** register with a required Philippine mobile number and optional email; log in by phone or email; submit reports with an editable contact snapshot and optional evidence; search/filter/sort/page through own reports; read public updates and reply; submit eligible follow-ups, progress requests and dismissal appeals; edit own profile/password.
+
+**Employee:** work from a current-assignment queue; view reporter contact details; add public updates or internal notes; **Submit for Review**; handle eligible User requests in an assignment-scoped **Action Center**. Final status, priority, links, assignment, archive and account controls remain Admin actions.
+
+**Admin:** use active-only dashboard counts, charts, status tiles and filters; set priority; assign/reassign/unassign active Employees; link eligible duplicates across categories; review Employee work in **For Review**; handle User requests/appeals in **Action Center**; resolve/dismiss/revert reports with history; manage archives and account contacts, roles and activity.
+
+Legacy `resident` roles and `/resident/...` links remain compatible with canonical `user` roles and `/user/...` routes.
+
+## Workflow rules
+
+### Reports, assignment and review
+
+Reports start **Pending** with **Medium** priority. Ownership comes from the authenticated User. A valid Philippine mobile contact is required for submission and stored as a snapshot; legacy reports may fall back to account contact. **Others** requires a custom category description.
+
+Assigning a Pending report to an active Employee changes it to **In Progress** and records history. Reassignment invalidates earlier review. Employee deactivation/role changes clear active assignments while preserving reports and history.
+
+An ordinary Admin public update or resolution on an assigned report requires a current **pending** Employee review. Either action completes review. **Mark Reviewed** also completes it without posting a note or changing status. Another ordinary public update/resolution needs another Employee submission. Internal notes, Admin triage, unassigned reports and User-request/appeal handling remain available under their own rules.
+
+Direct resolution sequence: **Employee Submit for Review → Admin For Review → Mark Resolved**. Posting an Admin public update or selecting Mark Reviewed first consumes that review.
+
+### Linked resolution and archives
+
+Admin resolution also resolves connected unresolved tickets, following duplicate links in both directions and through chains. Cycles are handled without repeatedly visiting a ticket. The selected assigned ticket still requires pending review; propagated resolution does not require separate reviews on linked tickets.
+
+Each newly resolved member is archived with a completion timestamp and status-history event. Already-resolved linked reports retain their completion history/timestamps. Other status changes do not propagate.
+
+New **Resolved** reports immediately leave active lists and appear in Admin **Archive**. **Dismissed** reports remain active until manually archived. Restoring one preserves its status/completion time and does not restore its whole linked group. Use **Revert Status** with a reason for an eligible backward change; restore is not reopen.
+
+Group resolution uses sequential conditional writes and process-local locks, not a multi-document transaction. A conflict can leave part of the group resolved; retrying resolution finishes remaining members.
+
+### Requests and communication
+
+| Request | Available on | Handling |
+| --- | --- | --- |
+| Follow-up | Own active Pending report | Admin or eligible assigned Employee |
+| Progress update | Own active In Progress report | Admin or eligible assigned Employee |
+| Appeal | Own Dismissed report, including archived dismissals | Admin decision |
+
+Follow-up/progress requests are limited to one of the same type per Manila calendar day; another is blocked while an earlier same-type request is unresolved. Appeals require an explanation and are limited to one per dismissal; no appeal deadline is implemented. Viewing/acknowledgement does not complete a request; a response or appeal decision does.
+
+Defaults: 5 User / 20 staff notes per ticket per rolling minute, 20 User / 100 staff communication reservations per rolling ten minutes, and a 60-second duplicate-note window. Configure thresholds through `server/config/communicationLimits.js` and its `BMIS_*` variables. These are communication limits, not general HTTP or incident-creation rate limits.
+
+## Requirements and installation
+
+- Node.js **20.19+** and npm for the app. Node.js **24** is the verified environment and supports the test commands below.
+- MongoDB: existing local service or included launcher.
+- Google Chrome for browser tests, or Playwright Chromium.
+
+From the repository root:
 
 ```powershell
-cd C:\PROJECTS\BMIS\server
+Set-Location server
 npm install
-cd ..\client
+Set-Location ../client
 npm install
 ```
 
-The backend reads `server/.env`. An environment file is already present in this workspace. For a fresh checkout, copy `server/.env.example` to `server/.env` and replace `JWT_SECRET` with your own secret. The default database is `mongodb://127.0.0.1:27017/bmis`; the API uses port 5000.
+Copy `server/.env.example` to `server/.env` for a fresh checkout and set a long local secret:
 
-Start your MongoDB service. If MongoDB is not installed, open a terminal and run:
+```dotenv
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/bmis
+JWT_SECRET=replace-with-your-own-long-secret
+JWT_EXPIRE=7d
+```
+
+Vite defaults to `http://localhost:5000` for `/api` and `/uploads`. For another API port, set the matching `PORT` in `server/.env` and create ignored `client/.env`, for example:
+
+```dotenv
+BMIS_API_TARGET=http://127.0.0.1:5002
+```
+
+**This workspace uses API 5002 and frontend 3000** because another application occupies 5000. A process-level `BMIS_API_TARGET` overrides the client environment-file value.
+
+### Database and demo accounts
+
+Start your existing MongoDB service. If none is running, use a separate terminal from `server/`:
 
 ```powershell
-cd C:\PROJECTS\BMIS\server
 npm run db
 ```
 
-This starts a real MongoDB 8.2.6 process bound to localhost on port 27017. It downloads the binary on first use if it is not cached. Data persists in `server/.local-data/mongodb`; keep the terminal running. Use either this launcher or your existing MongoDB service on that port.
+The launcher runs MongoDB 8.2.6 on localhost port 27017, downloading it on first use if needed. Data persists in ignored `server/.local-data/mongodb/`. Keep its terminal open and avoid starting a second instance on an occupied port.
 
-Seed the demonstration database once:
+For a fresh demonstration database, run `npm run seed` from `server/`. **Seeding replaces the configured users and tickets; do not reseed records you need to keep.** It creates **15 accounts: 3 Admin, 2 Employee and 10 User**, plus 28 reports: 13 Resolved, 7 Dismissed, 3 In Progress and 5 Pending. Seeded completed reports initially remain active for archive demonstrations; new resolutions auto-archive.
+
+The seed prints credentials grouped by role. Original samples, including `maria.santos@email.com` (Admin) and `ana.reyes@email.com` (User), use `Password123!`. Additional dispatch accounts have saved/generated passwords; not every account shares that sample password. Local credentials are ignored at `server/.local-data/demo-accounts-2026-10-19.json` unless overridden.
+
+| Additional role | Email |
+| --- | --- |
+| Admin | `dispatch.admin@bmis.test` |
+| Employee | `dispatch.employee1@bmis.test` |
+| Employee | `dispatch.employee2@bmis.test` |
+| User | `dispatch.user1@bmis.test` |
+| User | `dispatch.user2@bmis.test` |
+
+Registration creates Users only; seed/create the initial Admin before using account controls. Existing databases with a legacy email index may need `server/scripts/migrate-account-indexes.js`; inspect its supported options and resolve reported contact conflicts before applying changes. Current indexes enforce unique optional email and normalized phone identities.
+
+## Run
+
+With MongoDB running, start separate terminals:
 
 ```powershell
-cd C:\PROJECTS\BMIS\server
-npm run seed
-```
-
-**Seeding replaces all users and tickets in the configured database.** The prepared dataset contains 10 accounts (2 admins and 8 residents) and 28 realistic tickets: 13 Resolved, 7 Dismissed, 3 In Progress, and 5 Pending. All 20 completed tickets initially remain in the active queue so you can demonstrate archiving them.
-
-Start the backend and frontend in separate terminals:
-
-```powershell
-# Backend
-cd C:\PROJECTS\BMIS\server
+# Backend, from server/
 npm run dev
 ```
 
 ```powershell
-# Frontend
-cd C:\PROJECTS\BMIS\client
+# Frontend, from client/
 npm run dev
 ```
 
-Open [BMIS at localhost:3000](http://localhost:3000). The frontend proxies API calls and evidence photos to the backend.
+Open **http://localhost:3000**. API health is `/` on the configured API port, e.g. **http://127.0.0.1:5002/** here. Use separate browser profiles or normal/incognito windows for roles: tabs in one profile share localStorage login.
 
-## Demo accounts
+## Demo walkthrough
 
-All seeded accounts use **`Password123!`**.
+1. As a User, submit two reports about the same issue. Optional evidence: one JPEG/JPG, PNG or WebP image up to **5 MB**.
+2. Open **My Tickets** to search/filter and inspect reports. Users access their own reports and public conversation.
+3. As Admin, assess priority on the primary and **Link Multiple Duplicates** to the other unresolved active report.
+4. Assign an active Employee; the Pending primary becomes In Progress.
+5. As that Employee, open **Assigned Tickets**, add progress information and **Submit for Review**.
+6. As Admin, open **For Review** and **Mark Resolved** directly. Review completes and the connected unresolved group resolves/archives.
+7. Refresh **Archive** to inspect both reports. Restoring one preserves Resolved status/time; it does not reopen/restore the whole group.
+8. On a separate eligible report, demonstrate a User request or dismissal appeal through **Action Center**. Internal staff notes stay hidden from User responses.
+9. Use **Users** for contact editing and separately confirmed role/activity changes; use **Profile** for own-account editing.
 
-| Role     | Email                        |
-| -------- | ---------------------------- |
-| Admin    | `maria.santos@email.com`     |
-| Admin    | `juan.delacruz@email.com`    |
-| Resident | `ana.reyes@email.com`        |
-| Resident | `pedro.garcia@email.com`     |
-| Resident | `rosa.martinez@email.com`    |
-| Resident | `carlos.bautista@email.com`  |
-| Resident | `elena.villanueva@email.com` |
-| Resident | `roberto.aquino@email.com`   |
-| Resident | `lorna.fernandez@email.com`  |
-| Resident | `miguel.torres@email.com`    |
+Active lists exclude archived resolutions. Use Admin Archive for final proof. Owners retain authorized direct-detail access and have an archived-Dismissed list option for appeals.
 
-## Demonstration workflow
+## API overview
 
-1. Sign in as Ana, select **Submit Ticket**, and report an issue. Evidence is optional: one JPEG, PNG, or WebP image up to 5 MB.
-2. Open **My Tickets** to filter reports and view details. Residents can access only their own reports.
-3. Sign in as Maria and select **View** on the report. Choose **Start Processing**, confirm, then **Mark Resolved** and confirm.
-4. Choose **Archive Ticket** and confirm. The ticket leaves the active dashboard and appears under **Archive**.
-5. Restore it from **Archive**. Its Resolved status and completion timestamp remain intact.
-6. Use **Link to Duplicate** on an active report to link another active ticket. Use **Users** to edit contact details or roles. Changed roles apply to existing sessions on the next API request.
-7. Open **Profile** to edit your details. Leave the new password blank to retain the current password.
-8. To demonstrate password recovery, log out and choose **Forgot Password**. The localhost demo displays the reset link on screen; copy it into the browser and set a new password. No email delivery service is used.
+Protected calls use `Authorization: Bearer <token>`. Roles, ownership and input are enforced server-side.
+
+| Area | Routes |
+| --- | --- |
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `PUT /api/auth/profile` |
+| Demo recovery | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password/:token` |
+| Reports | `POST /api/tickets`, `GET /api/tickets`, `GET /api/tickets/my-tickets`, `GET /api/tickets/:id` |
+| Notes | `POST /api/tickets/:id/notes` |
+| Lifecycle | `PATCH /api/tickets/:id/assign`, `PUT /api/tickets/:id/status`, `PATCH /api/tickets/:id/priority`, `POST /api/tickets/:id/revert` |
+| Links | `PUT /api/tickets/:id/link`, `PUT /api/tickets/:id/unlink` |
+| Reviews | `GET /api/tickets/reviews`, `POST /api/tickets/:id/review`, `PATCH /api/tickets/:id/review` |
+| Requests | `GET /api/tickets/requests`, `POST /api/tickets/:id/requests`, `PATCH /api/tickets/:id/requests/:requestId` |
+| Accounts | `GET /api/users`, `GET /api/users/employees`, `GET /api/users/:id`, `PUT /api/users/:id`, `PATCH /api/users/:id/role`, `PATCH /api/users/:id/active` |
+| Archive | `GET /api/archive`, `PUT /api/archive/:id/archive`, `PUT /api/archive/:id/restore` |
+
+Protected requests load current role/activity from MongoDB. Employee access is assignment-scoped; User responses omit private notes and staff workflow metadata. Collections are `users`, `tickets` and `communicationquotas`. Notes, requests and histories are embedded in tickets. Images live in `server/uploads/` with paths stored in tickets.
 
 ## Verification
+
+From the repository root:
+
+```powershell
+node --test --test-concurrency=1 server/tests/*.test.js
+node --test client/tests/role-contract.test.js
+```
 
 From `client/`:
 
@@ -92,15 +177,11 @@ npm run build
 npm test
 ```
 
-The Playwright suite starts its own API on port 5001 and frontend on port 3001, using a fresh temporary MongoDB. It does not seed or modify the normal `bmis` database. The tests cover demo requirements, ticket lifecycle and photos, filters and dashboard totals, profile/user editing, duplicates, registration/logout, password recovery, role enforcement, and privacy across resident accounts. First use may download the MongoDB test binary. Test screenshots and traces appear in `client/test-results/` on failure.
+Playwright uses isolated API **5001**, frontend **3001** and fresh temporary MongoDB; it does not seed the normal `bmis` database. First use may download MongoDB. Screenshots/traces appear in ignored `client/test-results/`. Avoid competing acceptance servers and run database suites sequentially.
 
-For the frontend contract checks alone, without MongoDB:
+For frontend contract checks without MongoDB: `npm run test:frontend` from `client/`.
 
-```powershell
-npm run test:frontend
-```
-
-For machines using Playwright's bundled browser:
+To use Playwright Chromium:
 
 ```powershell
 npx playwright install chromium
@@ -108,12 +189,32 @@ $env:PLAYWRIGHT_CHANNEL = 'chromium'
 npm test
 ```
 
-## Project references
+Coverage includes contacts, authorization, assignments, reviews, requests/appeals, lifecycle/history/archive, linked-group resolution, privacy and frontend workflows. Run checks before reporting a fresh passing result.
 
-- [Current session handoff](Context/SESSION_HANDOFF.md) — start here for completed work, confirmed decisions, verification limits, and the next step.
-- [Project ledger](Context/PROJECT_STATUS.md) — implementation specification, checklist, and historical verification record.
-- [Academic requirements](Context/CTSYSINL-PROJECT-OVERVIEW.pdf) — original project requirements.
-- [Backlog](update.md) — the user's notes and remaining feature ideas.
-- [Original implementation record](docs/implementation-plan.md) — historical completion work and integration decisions.
+## Project layout
 
-The application uses React 18, Vite, Ant Design, Express, Mongoose, JWT authentication and local disk uploads. It is intended for the localhost demonstration described in the project references.
+```text
+assets/                 Shared images
+client/src/             React pages, components, API helpers and styles
+client/tests/           Browser and role-contract tests
+server/config/          Database and communication configuration
+server/controllers/     API handlers and business logic
+server/middleware/      Authentication, roles and uploads
+server/models/          Mongoose schemas and embedded structures
+server/routes/          Express endpoints
+server/scripts/         DB/test launchers, provisioning and index migration
+server/seeders/          Replaceable demonstration dataset
+server/tests/           Backend and isolated-database tests
+server/uploads/         Local evidence; uploaded files ignored
+server/utils/           Access, lifecycle, contacts, review and request policies
+```
+
+Local prompts, context, documentation/presentation exports, backlog notes, screenshot exports, secrets, databases and generated artifacts are excluded through `.gitignore`. Source, required assets, lockfiles, configuration examples and tests remain versioned.
+
+## Scope and limits
+
+- Localhost, non-emergency demonstration; not a deployed emergency service.
+- Recovery returns a demo reset token/link; **no email or SMS is sent**.
+- Evidence uses local disk/static serving, not cloud or authenticated private media storage.
+- Location is text; GPS dispatch, notifications and an operator connection are not implemented.
+- Locks coordinate one Node process; distributed locks and transactional linked-group rollback are not provided.

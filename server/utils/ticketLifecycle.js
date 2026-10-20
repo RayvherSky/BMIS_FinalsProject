@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const { reversalOptions } = require('./requestPolicy');
 const { canonicalRole } = require('./roles');
+const { invalidateReview, mergeReviewUpdate } = require('./reviewPolicy');
 function problem(status, message, extra = {}) { return Object.assign(new Error(message), { status, ...extra }); }
 function textInput(value, label, required = true) {
   if (value === undefined && !required) return '';
@@ -29,6 +30,7 @@ async function reversalUpdate(ticket, status, reason, actor, now = new Date()) {
   const event = statusEvent(ticket, status, actor, options.legacy ? 'legacy_correction' : 'reversal', reason, now);
   const update = { $set: { status, isArchived: false, archivedAt: null, resolvedAt: null, dismissedAt: null },
     $push: { statusHistory: event }, $inc: { workflowVersion: 1 } };
+  mergeReviewUpdate(update, invalidateReview(ticket, actor, now, 'reversal'));
   const employeeId = ticket.assignedTo?._id || ticket.assignedTo;
   if (employeeId) {
     const employee = await User.findById(employeeId).select('role isActive');

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { testPhone } from './helpers/phone';
 
 const password = 'Password123!';
 
@@ -35,12 +36,12 @@ test('NOTES residents cannot select priority and see the priority assigned by an
 test('NOTES a failed role change keeps the confirmation available for a deliberate retry', async ({ page, request }) => {
   const admin = await login(request, 'maria.santos@email.com');
   const email = `notes-role-${Date.now()}@example.com`;
-  const registered = await request.post('/api/auth/register', { data: { firstName: 'Notes', lastName: 'Role', email, password } });
+  const registered = await request.post('/api/auth/register', { data: { firstName: 'Notes', lastName: 'Role', email, password, phone: testPhone() } });
   expect(registered.status()).toBe(201);
   const { user } = await registered.json();
   await page.addInitScript(token => localStorage.setItem('token', token), admin.token);
   await page.goto('/admin/users');
-  const search = page.getByPlaceholder('Search users by name or email');
+  const search = page.getByPlaceholder('Search users by name, email or phone');
   await search.fill(email);
   await search.press('Enter');
   const row = page.getByRole('row').filter({ hasText: email });

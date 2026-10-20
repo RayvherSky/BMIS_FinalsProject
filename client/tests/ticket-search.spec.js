@@ -15,6 +15,7 @@ const archived = [
 const rows = page => page.locator('.ant-table-tbody > tr.ant-table-row, .user-report-card');
 
 async function mockLists(page, role = 'admin') {
+  await page.route('**/api/tickets/reviews*', route => route.fulfill({ json: { items: [], total: 0, counts: { pending: 0, reviewed: 0 } } }));
   await page.addInitScript(() => localStorage.setItem('token', 'search-fixture'));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { ...owner, role } }));
   for (const [pathname, records] of [['/api/tickets', active], ['/api/tickets/my-tickets', active.filter(ticket => ticket.submittedBy._id === owner._id)], ['/api/archive', archived]]) {
@@ -65,20 +66,21 @@ test(`SEARCH ${pathname} shares live multi-result and fuzzy search`, async ({ pa
 });
 }
 
-test('SEARCH admin tiles open matching searchable lists including archived status results', async ({ page }) => {
+test('SEARCH admin tiles open matching searchable active lists and keep archives separate', async ({ page }) => {
   await mockLists(page);
   await page.goto('/admin/dashboard');
   const resolved = page.getByRole('button', { name: 'Show Resolved', exact: true });
-  await expect(resolved.locator('.ant-statistic-content-value')).toHaveText('2');
+  await expect(resolved.locator('.ant-statistic-content-value')).toHaveText('1');
   await resolved.click();
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page)).toHaveCount(1);
   for (const row of await rows(page).all()) await expect(row).toContainText('Resolved');
   await page.getByRole('searchbox', { name: 'Search tickets', exact: true }).fill('Archived');
-  await expect(rows(page)).toHaveCount(1);
-  const archive = page.getByRole('button', { name: 'Show Archived Tickets', exact: true });
-  await archive.focus();
-  await archive.press('Enter');
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show Archived Tickets', exact: true })).toHaveCount(0);
+  const activeTile = page.getByRole('button', { name: 'Show Total Active Tickets', exact: true });
+  await activeTile.focus();
+  await activeTile.press('Enter');
+  await expect(rows(page)).toHaveCount(4);
   await expect(page.getByRole('searchbox', { name: 'Search tickets', exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Show Total Active Tickets', exact: true }).click();
   await expect(rows(page)).toHaveCount(4);

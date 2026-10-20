@@ -14,6 +14,8 @@ import TicketRequests from '../components/TicketRequests/TicketRequests';
 import RequestHistory from '../components/TicketRequests/RequestHistory';
 import ReversalPanel from '../components/TicketRequests/ReversalPanel';
 import { requestErrorMessage } from '../utils/ticketRequests';
+import TicketReviewPanel from '../components/TicketReview/TicketReviewPanel';
+import { REVIEW_CHANGED_EVENT } from '../api/reviewApi';
 
 const TicketDetails = () => {
   const { id } = useParams();
@@ -28,7 +30,7 @@ const TicketDetails = () => {
   const base = getTicketBasePath(role);
   
   const [ticket, setTicket] = useState(null);
-  const backPath = isStaff && location.state?.fromActionCenter ? `${base}/action-center` : isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : isEmployee ? '/employee/assigned-tickets' : `/user/my-tickets${location.state?.fromArchivedDismissed ? '?archived=dismissed' : ''}`;
+  const backPath = isStaff && location.state?.fromActionCenter ? `${base}/action-center` : isAdmin && location.state?.fromReview ? '/admin/for-review' : isAdmin ? (ticket?.isArchived || location.state?.fromArchive ? '/admin/archive' : '/admin/dashboard') : isEmployee ? '/employee/assigned-tickets' : `/user/my-tickets${location.state?.fromArchivedDismissed ? '?archived=dismissed' : ''}`;
   const [otherTickets, setOtherTickets] = useState([]);
   const [selectedDuplicates, setSelectedDuplicates] = useState([]); 
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ const TicketDetails = () => {
   const [noteText, setNoteText] = useState('');
   const [isPrivateNote, setIsPrivateNote] = useState(false); // ADDED: state for checkbox
   const [submittingNote, setSubmittingNote] = useState(false);
+  const needsReview = isAdmin && Boolean(ticket?.assignedTo) && ticket?.review?.status !== 'pending';
   
   const view = useMemo(() => ({ id }), [id, role, user._id]);
   const currentView = useRef(view);
@@ -45,6 +48,10 @@ const TicketDetails = () => {
   const renderedAccessVersion = accessVersion.current;
   const confirmation = useRef(null);
   currentView.current = view;
+
+  useEffect(() => {
+    if (isAdmin && ticket) window.dispatchEvent(new Event(REVIEW_CHANGED_EVENT));
+  }, [isAdmin, ticket?._id, ticket?.review?.status, ticket?.review?.requestedAt, ticket?.assignedTo?._id]);
 
   useEffect(() => {
     let active = true;
@@ -115,7 +122,7 @@ const TicketDetails = () => {
     confirmation.current = Modal.confirm({
       title: `Change status to ${status}?`,
       content: status === 'Resolved'
-        ? 'This will resolve the report and move it to Archive immediately.'
+        ? 'This will resolve this report and all linked tickets, including chained links, and move them to Archive immediately.'
         : 'The user will see the updated status on their ticket.',
       okText: 'Confirm',
       cancelText: 'Cancel',
@@ -262,6 +269,7 @@ const TicketDetails = () => {
   });
 
   const items = ticket ? [
+    { key: 'reporter', label: 'Reported By', children: ticket.submittedBy ? `${ticket.submittedBy.firstName} ${ticket.submittedBy.lastName}` : 'Unknown', span: 2 },
     { key: 'title', label: 'Title', children: ticket.title, span: 2 },
     { key: 'description', label: 'Description', children: <span style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</span>, span: 2 },
     { key: 'category', label: 'Category', children: ticket.category === 'Others' && ticket.customCategory ? `Others (${ticket.customCategory})` : ticket.category },
@@ -282,7 +290,11 @@ const TicketDetails = () => {
       )
     },
     { key: 'location', label: 'Location', children: ticket.location },
-    { key: 'submitter', label: 'Submitted By', children: ticket.submittedBy ? `${ticket.submittedBy.firstName} ${ticket.submittedBy.lastName}${ticket.submittedBy.email ? ` (${ticket.submittedBy.email})` : ''}` : 'Unknown', span: 2 },
+    ...(isStaff ? [
+      { key: 'contact', label: 'Contact Number', children: ticket.contactNumber || ticket.submittedBy?.phone || 'Not provided' },
+      { key: 'email', label: 'Email', children: ticket.submittedBy?.email || 'Not provided' },
+      { key: 'address', label: 'Address', children: ticket.submittedBy?.address || 'Not provided', span: 2 },
+    ] : []),
     ...(!isAdmin ? [{ key: 'assignment', label: 'Assigned Employee', children: ticket.assignedTo ? `${ticket.assignedTo.firstName} ${ticket.assignedTo.lastName}` : 'Awaiting assignment', span: 2 }] : []),
     { key: 'created', label: 'Date Submitted', children: formatDate(ticket.createdAt), span: 2 },
     ...(ticket.resolvedAt ? [{ key: 'resolved', label: 'Resolved At', children: formatDate(ticket.resolvedAt), span: 2 }] : []),
@@ -323,19 +335,20 @@ const TicketDetails = () => {
   const imageUrl = ticket?.image ? (ticket.image.startsWith('/uploads/') ? ticket.image : `/uploads/${ticket.image}`) : '';
 
   const duplicateOptions = ticket ? otherTickets
-    .filter((item) => item.category === ticket.category && !item.linkedTicket && item.status !== 'Resolved' && !item.isArchived)
+    .filter((item) => !item.linkedTicket && item.status !== 'Resolved' && !item.isArchived)
     .map((item) => ({ value: item._id, label: `${item.title} (${item.status})` })) 
     : [];
 
   return (
     <>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ marginBottom: 20 }}>Back to tickets</Button>
+      <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => navigate(backPath)} style={{ marginBottom: 20 }}>Back to tickets</Button>
       <Button className="detail-refresh" onClick={refreshTicket} disabled={working || loading}>Refresh details</Button>
       <Spin spinning={loading} tip="Loading ticket...">
         {error ? <Result status="warning" title={error} /> : ticket && (
           <Card className="detail-card" title={<h1 style={{ fontSize: 22, color: '#0A4D68', margin: 0 }}>Ticket Details</h1>}>
             <Descriptions bordered layout={screens.sm ? 'horizontal' : 'vertical'} column={{ xs: 1, sm: 1, md: 2 }} items={items} />
             {isAdmin && <AssignmentPanel ticket={ticket} disabled={working} onUpdate={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
+            {isStaff && <TicketReviewPanel key={`review-${id}`} ticket={ticket} disabled={working || submittingNote} onAccessError={handleAccessError} onUpdated={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
             {imageUrl && <div style={{ marginTop: 24 }}><Typography.Title level={5}>Evidence Photo</Typography.Title><Image className="detail-image" src={imageUrl} alt={`Evidence for ${ticket.title}`} style={{ maxHeight: 400, objectFit: 'contain' }} /></div>}
             {isAdmin && <ReversalPanel key={`reversal-${id}`} ticket={ticket} disabled={working || submittingNote} onAccessError={handleAccessError} onUpdate={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
             {!isStaff && <TicketRequests key={`requests-${id}`} ticket={ticket} disabled={working || submittingNote} onAccessError={handleAccessError} onUpdate={updated => { if (currentView.current === view && renderedAccessVersion === accessVersion.current) setTicket(updated); }} />}
@@ -378,7 +391,7 @@ const TicketDetails = () => {
                     type="primary"
                     onClick={handleAddNote}
                     loading={submittingNote}
-                    disabled={!noteText.trim()}
+                    disabled={!noteText.trim() || (needsReview && !isPrivateNote)}
                   >
                     Post Update
                   </Button>
@@ -401,15 +414,15 @@ const TicketDetails = () => {
                 <Divider style={{ marginTop: 32 }} />
                 <div className="admin-actions">
                   {ticket.status === 'Pending' && <Button type="primary" disabled={working} onClick={() => confirmStatus('In Progress')}>Start Processing</Button>}
-                  {ticket.status === 'In Progress' && <Button type="primary" disabled={working} onClick={() => confirmStatus('Resolved')}>Mark Resolved</Button>}
+                  {ticket.status === 'In Progress' && <Button type="primary" disabled={working || needsReview} onClick={() => confirmStatus('Resolved')}>Mark Resolved</Button>}
                   {['Pending', 'In Progress'].includes(ticket.status) && <Button danger disabled={working} onClick={() => confirmStatus('Dismissed')}>Dismiss</Button>}
                   {['Resolved', 'Dismissed'].includes(ticket.status) && <Button type="primary" disabled={working} onClick={confirmArchive}>Archive Ticket</Button>}
                 </div>
                 
                 {ticket.status !== 'Resolved' && <div style={{ marginTop: 24, padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
-                  <Typography.Title level={5}>Link Multiple Duplicates (Category: {ticket.category})</Typography.Title>
+                  <Typography.Title level={5}>Link Multiple Duplicates</Typography.Title>
                   <Typography.Text type="secondary" style={{ display: 'block', marginBottom: '12px' }}>
-                    Select other unresolved active tickets in the same category to link as duplicates of this ticket.
+                    Select unresolved active tickets from any category to link as duplicates of this ticket.
                   </Typography.Text>
                   
                   <Space.Compact direction={screens.sm ? 'horizontal' : 'vertical'} style={{ width: '100%', maxWidth: 600 }}>

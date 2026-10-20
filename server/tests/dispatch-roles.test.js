@@ -68,7 +68,7 @@ test('canonical roles, legacy sessions, Employee login and forged public registr
     assert.equal(me.body.role, role === 'resident' ? 'user' : role);
     noCredentials(me.body);
   }
-  const created = await send('/auth/register', { role: null, method: 'POST', body: { firstName: 'Public', lastName: 'Person', email: 'public@example.test', password, role: 'admin', isActive: false } });
+  const created = await send('/auth/register', { role: null, method: 'POST', body: { firstName: 'Public', lastName: 'Person', email: 'public@example.test', password, phone: '09171234567', role: 'admin', isActive: false } });
   assert.equal(created.status, 201);
   assert.equal(created.body.user.role, 'user');
   assert.equal((await User.findById(created.body.user._id)).role, 'user');
@@ -202,7 +202,7 @@ test('Employee full ticket-ID search remains scoped to active assignments and pr
 
 test('User report creation uses the restricted response without assignment history or forged staff fields', async () => {
   const created = await send('/tickets', { role: 'user', method: 'POST', body: {
-    title: 'New public report', description: 'Report details', category: 'Infrastructure', location: 'Baclaran',
+    title: 'New public report', description: 'Report details', category: 'Infrastructure', location: 'Baclaran', contactNumber: '09171234567',
     priority: 'Urgent', assignedTo: String(accounts.employee._id), assignmentHistory: [{ action: 'assigned' }],
   } });
   assert.equal(created.status, 201);

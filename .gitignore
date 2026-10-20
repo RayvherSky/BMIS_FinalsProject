@@ -11,3 +11,13 @@ agentprompt.md
 CTSYSINL-PROJECT-OVERVIEW.pdf
 PROJECT_STATUS.md
 ui-polish-prompt.md
+
+# Local planning, agent context, reports, and presentation materials
+/[Aa]gentprompt.md
+/[Cc]ontext/
+/[Dd]ocs/
+/update.md
+
+# Local UI screenshot exports
+/ui-screenshots/
+/ui-screenshots.zip

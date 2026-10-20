@@ -9,7 +9,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 // back to server/.env or permit a caller to select a normal database or port.
 async function createTestDatabase(name) {
   const configuredUri = process.env.BMIS_TEST_MONGO_URI;
-  if (!configuredUri) return MongoMemoryServer.create({ binary: { version: '8.2.6' } });
+  if (!configuredUri) return MongoMemoryServer.create({ binary: { version: '8.2.6' }, instance: { launchTimeout: 60000 } });
   const match = /^mongodb:\/\/(127\.0\.0\.1|localhost):48174\/(bmis_update1_test_[a-zA-Z0-9_]+)$/.exec(configuredUri);
   assert.ok(match, 'BMIS_TEST_MONGO_URI must use loopback port 48174 and a bmis_update1_test_ database prefix');
   assert.match(name, /^[a-zA-Z][a-zA-Z0-9_]*$/, 'A safe test-suite name is required');

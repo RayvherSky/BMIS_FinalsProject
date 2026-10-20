@@ -7,6 +7,9 @@ const { populateTicket, serializeTicket, canRead } = require('../utils/ticketAcc
 const { withAccountLock, withTicketLock } = require('../utils/accountLock');
 const { problem, textInput, predicate, statusEvent, currentActor, sendProblem } = require('../utils/ticketLifecycle');
 const { reserve, checkNote } = require('../utils/communicationLimits');
+const { normalizePhone, REQUIRED_PHONE_MESSAGE } = require('../utils/validatePhone');
+const { pendingReview, assignmentGuard, markReviewed, invalidateReview, mergeReviewUpdate } = require('../utils/reviewPolicy');
+const { resolveLinkedTickets } = require('../utils/linkedTicketResolution');
 
 // @desc    Create a new ticket
 // @route   POST /api/tickets
@@ -28,6 +31,11 @@ const createTicket = async (req, res) => {
       return res.status(400).json({ message: "Please specify your custom category" });
     }
 
+    const suppliedContact = Object.prototype.hasOwnProperty.call(req.body, 'contactNumber');
+    const account = suppliedContact ? null : await User.findById(req.user.id).select('phone');
+    const contactNumber = normalizePhone(suppliedContact ? req.body.contactNumber : account?.phone);
+    if (!contactNumber) return res.status(400).json({ message: REQUIRED_PHONE_MESSAGE });
+
     const ticketData = {
       title,
       description,
@@ -36,6 +44,7 @@ const createTicket = async (req, res) => {
       // Residents report the situation; admins assess and change its priority.
       priority: "Medium",
       location,
+      contactNumber,
       submittedBy: req.user.id,
     };
 
@@ -163,7 +172,10 @@ const updateTicketStatus = async (req, res) => {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    await withAccountLock(req.user.id, () => withTicketLock(req.params.id, async () => {
+    // Serialize overlapping group resolutions before taking individual ticket
+    // locks, so two Admins resolving different members cannot deadlock.
+    const withResolutionLock = work => status === 'Resolved' ? withTicketLock('linked-resolution', work) : work();
+    await withAccountLock(req.user.id, () => withResolutionLock(() => withTicketLock(req.params.id, async () => {
       await currentActor(req.user);
       const current = await Ticket.findById(req.params.id);
       if (!current) throw problem(404, 'Ticket not found');
@@ -173,17 +185,23 @@ const updateTicketStatus = async (req, res) => {
       }
       const now = new Date();
       const update = { $set: { status }, $inc: { workflowVersion: 1 } };
-      if (status !== previousStatus) update.$push = { statusHistory: statusEvent(current, status, req.user, 'status', '', now) };
+      if (status === 'Resolved' && previousStatus !== 'Resolved' && current.assignedTo) {
+        if (!pendingReview(current)) throw problem(409, 'An Employee must request review before an Admin can resolve this assigned ticket.');
+        mergeReviewUpdate(update, markReviewed(current, req.user, now, 'resolution'));
+      }
+      if (status === 'Dismissed' && previousStatus !== 'Dismissed') mergeReviewUpdate(update, invalidateReview(current, req.user, now, 'dismissal'));
+      if (status !== previousStatus) update.$push = { ...update.$push, statusHistory: statusEvent(current, status, req.user, 'status', '', now) };
       if (status === 'Resolved') Object.assign(update.$set, {
         resolvedAt: previousStatus === 'Resolved' && current.resolvedAt ? current.resolvedAt : now,
         dismissedAt: null, isArchived: true, archivedAt: current.isArchived && current.archivedAt ? current.archivedAt : now,
       });
       else if (status === 'Dismissed') Object.assign(update.$set, { dismissedAt: previousStatus === 'Dismissed' && current.dismissedAt ? current.dismissedAt : now, resolvedAt: null });
-      const updated = await Ticket.findOneAndUpdate(predicate(current), update, { new: true, runValidators: true });
+      const updated = await Ticket.findOneAndUpdate(predicate(current, assignmentGuard(current)), update, { new: true, runValidators: true });
       if (!updated) throw problem(409, 'Ticket changed. Refresh and retry the status change.');
+      if (status === 'Resolved') await resolveLinkedTickets(updated, req.user, now);
       const result = await populateTicket(Ticket.findById(current._id), 'admin');
       res.status(200).json(serializeTicket(result, req.user));
-    }));
+    })));
   } catch (error) {
     if (error.kind === "ObjectId")
       return res.status(404).json({ message: "Ticket not found" });
@@ -304,14 +322,18 @@ const addTicketNote = async (req, res) => {
       if (!canRead(ticket, actor)) return res.status(403).json({ message: "Not authorized to modify this ticket" });
       const privateNote = actor.role !== 'user' && Boolean(isPrivate);
       const now = new Date();
+      const completesReview = actor.role === 'admin' && !privateNote && Boolean(ticket.assignedTo);
+      if (completesReview && !pendingReview(ticket)) throw problem(409, 'An Employee must request review before an Admin can post a public update on this assigned ticket.');
       checkNote(ticket, actor, content, privateNote, now);
       const note = { text: content, addedBy: actor.id, isPrivate: privateNote, authorRole: actor.role, createdAt: now,
         kind: privateNote ? 'internal' : actor.role === 'user' ? 'reply' : 'update' };
       const extra = actor.role === 'employee' ? { assignedTo: actor.id, isArchived: { $ne: true } } : actor.role === 'user' ? { submittedBy: actor.id } : {};
+      const update = { $push: { notes: note }, $inc: { workflowVersion: 1 } };
+      if (completesReview) mergeReviewUpdate(update, markReviewed(ticket, actor, now, 'public_update'));
       const release = await reserve(actor, now);
       try {
         const updated = await Ticket.findOneAndUpdate(
-          predicate(ticket, extra), { $push: { notes: note }, $inc: { workflowVersion: 1 } }, { new: true, runValidators: true });
+          predicate(ticket, { ...assignmentGuard(ticket), ...extra }), update, { new: true, runValidators: true });
         if (!updated) throw problem(actor.role === 'employee' ? 403 : 409, 'Ticket access or content changed; refresh and retry.');
       } catch (error) { await release(); throw error; }
       const updatedTicket = await populateTicket(Ticket.findById(ticket._id), actor.role);

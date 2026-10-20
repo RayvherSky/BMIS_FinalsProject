@@ -11,7 +11,7 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
-import { PHONE_HELP, phoneRules } from '../utils/phone';
+import { REQUIRED_PHONE_HELP, requiredPhoneRules } from '../utils/phone';
 
 const { Text } = Typography;
 
@@ -79,8 +79,8 @@ const Register = () => {
 
           <Form.Item
             name="email"
+            label="Email (optional)"
             rules={[
-              { required: true, message: 'Please enter your email' },
               { type: 'email', message: 'Please enter a valid email' },
             ]}
           >
@@ -129,12 +129,12 @@ const Register = () => {
             </Col>
           </Row>
 
-          <Form.Item name="phone" rules={phoneRules} extra={PHONE_HELP}>
+          <Form.Item name="phone" label="Contact Number" rules={requiredPhoneRules} extra={REQUIRED_PHONE_HELP}>
             <Input
               type="tel"
               autoComplete="tel"
               prefix={<PhoneOutlined style={{ color: '#0A4D68' }} />}
-              placeholder="Phone Number (optional)"
+              placeholder="Phone Number"
             />
           </Form.Item>
 

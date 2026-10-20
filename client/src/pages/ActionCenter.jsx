@@ -179,7 +179,7 @@ export default function ActionCenter() {
           <Link to={`${base}/ticket/${selected.item.ticketId}`} state={{ fromActionCenter: true }}>Open ticket and evidence</Link>
           <div className="request-review-record"><RequestRecord request={request} /></div>
           {canHandle && <>
-            {request.state === 'pending' && <Button loading={saving} onClick={() => submit('acknowledge')}>Acknowledge</Button>}
+            {request.state === 'pending' && <Button aria-label="Acknowledge" aria-busy={saving} loading={saving} disabled={saving} onClick={() => submit('acknowledge')}>Acknowledge</Button>}
             {(!isAppeal || isAdmin) && <Form layout="vertical" className="request-form" onFinish={() => submit(isAppeal ? 'decide' : 'respond')}>
               {isAppeal && <>
                 <Alert type="info" showIcon message="Review the ticket’s existing evidence before deciding." description="Accepting saves the public decision and reopens the ticket together. Rejecting keeps the dismissal." />
@@ -192,7 +192,7 @@ export default function ActionCenter() {
               </>}
               <Form.Item label={isAppeal ? 'Public decision reason' : 'Public response'} htmlFor="request-public-response" required><Input.TextArea id="request-public-response" rows={4} value={text} onChange={event => setText(event.target.value)} disabled={saving} /></Form.Item>
               <Typography.Paragraph type="secondary">This response is visible to the reporting user and completes this request.</Typography.Paragraph>
-              <Button type="primary" htmlType="submit" loading={saving} disabled={!text.trim() || (isAppeal && (!decision || (decision === 'accepted' && !reopeningOptions.includes(status))))}>{isAppeal ? 'Submit decision' : 'Send response and complete'}</Button>
+              <Button type="primary" htmlType="submit" aria-label={isAppeal ? 'Submit decision' : 'Send response and complete'} aria-busy={saving} loading={saving} disabled={saving || !text.trim() || (isAppeal && (!decision || (decision === 'accepted' && !reopeningOptions.includes(status))))}>{isAppeal ? 'Submit decision' : 'Send response and complete'}</Button>
             </Form>}
           </>}
         </>}

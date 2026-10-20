@@ -5,10 +5,14 @@ const staffName = value => value && ({ _id: value._id || value, ...(value.firstN
 
 function populateTicket(query, role) {
   const admin = canonicalRole(role) === 'admin';
-  query.populate('submittedBy', 'firstName lastName email')
+  query.populate('submittedBy', ['admin', 'employee'].includes(canonicalRole(role)) ? 'firstName lastName email phone address' : 'firstName lastName email')
     .populate('notes.addedBy', 'firstName lastName role')
     .populate('assignedTo', admin ? 'firstName lastName email' : 'firstName lastName')
     .populate({ path: 'linkedTicket', select: admin ? undefined : '_id title submittedBy assignedTo isArchived' });
+  if (['admin', 'employee'].includes(canonicalRole(role))) {
+    query.populate('review.requestedBy', 'firstName lastName')
+      .populate('review.reviewedBy', 'firstName lastName');
+  }
   if (admin) {
     query.populate('statusHistory.changedBy', 'firstName lastName');
     for (const field of ['previousEmployee', 'newEmployee', 'changedBy']) {
@@ -34,6 +38,8 @@ function serializeTicket(document, actor) {
   if (role === 'admin') { ticket.reversal = reversalOptions(ticket); return ticket; }
   delete ticket.statusHistory;
   if (role === 'user') {
+    delete ticket.review;
+    delete ticket.reviewHistory;
     // Eligibility needs the private dismissal event key; compute it before filtering requests.
     ticket.requestEligibility = Object.fromEntries(TYPES.map(type => [type, eligibility(document, type)]));
   }

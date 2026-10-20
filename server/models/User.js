@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { normalizePhone } = require('../utils/validatePhone');
 
 const userSchema = new mongoose.Schema(
   {
@@ -15,10 +16,9 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, 'Email is required'],
-      unique: true,
       lowercase: true,
       trim: true,
+      set: value => typeof value === 'string' && !value.trim() ? undefined : value,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],
     },
     password: {
@@ -38,6 +38,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    phoneNormalized: { type: String, select: false },
     address: {
       type: String,
       default: '',
@@ -55,6 +56,12 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+userSchema.index({ email: 1 }, { name: 'email_optional_unique', unique: true, partialFilterExpression: { email: { $type: 'string' } } });
+userSchema.index({ phoneNormalized: 1 }, { name: 'phone_normalized_unique', unique: true, partialFilterExpression: { phoneNormalized: { $type: 'string' } } });
+userSchema.pre('validate', function () {
+  if (this.isNew || this.isModified('phone')) this.phoneNormalized = normalizePhone(this.phone) || undefined;
+});
 
 // Pre-save hook to hash password
 userSchema.pre('save', async function (next) {

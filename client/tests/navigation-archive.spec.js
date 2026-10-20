@@ -4,6 +4,7 @@ const resident = { _id: '000000000000000000000001', firstName: 'Ana', lastName: 
 const admin = { ...resident, _id: '000000000000000000000002', role: 'admin' };
 
 async function mockSession(page, account = resident) {
+  await page.route('**/api/tickets/reviews*', route => route.fulfill({ json: { items: [], total: 0, counts: { pending: 0, reviewed: 0 } } }));
   await page.addInitScript(() => localStorage.setItem('token', 'navigation-test-token'));
   await page.route('**/api/auth/me', route => route.fulfill({ json: account }));
   await page.route('**/api/tickets/my-tickets*', route => route.fulfill({ json: [] }));

@@ -2,7 +2,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { canonicalRole, knownRole, safeUser } = require('../utils/roles');
-const { isValidOptionalPhone, PHONE_MESSAGE } = require('../utils/validatePhone');
+const { normalizePhone, REQUIRED_PHONE_MESSAGE } = require('../utils/validatePhone');
+const { normalizeEmail, ensureAvailable, findByIdentifier, identifierFrom, prepareContactUpdate, accountFailure } = require('../utils/accountContacts');
 
 // Helper: Generate JWT token
 const generateToken = (id, role) => {
@@ -16,26 +17,21 @@ const generateToken = (id, role) => {
 // @access  Public
 const register = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, address } = req.body;
+    const { firstName, lastName, password, address } = req.body;
 
     // Validate required fields
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ message: 'Please provide firstName, lastName, email, and password' });
+    if (typeof firstName !== 'string' || !firstName.trim() || typeof lastName !== 'string' || !lastName.trim() || typeof password !== 'string' || !password) {
+      return res.status(400).json({ message: 'Please provide firstName, lastName, phone, and password' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    if (!isValidOptionalPhone(phone)) {
-      return res.status(400).json({ message: PHONE_MESSAGE });
-    }
-
-    // Check if email already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Email already registered' });
-    }
+    const phone = normalizePhone(req.body.phone);
+    if (!phone) return res.status(400).json({ message: REQUIRED_PHONE_MESSAGE });
+    const email = normalizeEmail(req.body.email);
+    await ensureAvailable({ email, phone });
 
     // Public registration always creates a standard User
     const user = await User.create({
@@ -64,7 +60,7 @@ const register = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    accountFailure(res, error);
   }
 };
 
@@ -73,22 +69,22 @@ const register = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const identifier = identifierFrom(req.body);
 
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+    if (typeof identifier !== 'string' || !identifier.trim() || typeof password !== 'string' || !password) {
+      return res.status(400).json({ message: 'Please provide your phone number or email and password' });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await findByIdentifier(identifier);
     if (!user || user.isActive === false || !knownRole(user.role)) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid phone number, email or password' });
     }
 
     // Compare password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid phone number, email or password' });
     }
 
     const token = generateToken(user._id, user.role);
@@ -107,7 +103,7 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    accountFailure(res, error);
   }
 };
 
@@ -132,21 +128,19 @@ const getMe = async (req, res) => {
 // @access  Private
 const updateProfile = async (req, res) => {
   try {
-    const { firstName, lastName, phone, address, password } = req.body;
+    const { firstName, lastName, address, password } = req.body;
 
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (!isValidOptionalPhone(phone)) {
-      return res.status(400).json({ message: PHONE_MESSAGE });
-    }
+    const contacts = await prepareContactUpdate(user, req.body);
 
     // Update allowed fields
     if (firstName) user.firstName = firstName;
     if (lastName) user.lastName = lastName;
-    if (phone !== undefined) user.phone = phone;
+    Object.assign(user, contacts);
     if (address !== undefined) user.address = address;
 
     // Update password if provided
@@ -170,7 +164,7 @@ const updateProfile = async (req, res) => {
       address: user.address,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    accountFailure(res, error);
   }
 };
 
@@ -179,15 +173,9 @@ const updateProfile = async (req, res) => {
 // @access  Public
 const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: 'Please provide an email address' });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await findByIdentifier(identifierFrom(req.body));
     if (!user) {
-      return res.status(404).json({ message: 'No user found with that email' });
+      return res.status(404).json({ message: 'No account found with that phone number or email' });
     }
 
     // Generate raw reset token
@@ -201,11 +189,11 @@ const forgotPassword = async (req, res) => {
 
     // Return raw token (localhost demo - no email sending)
     res.status(200).json({
-      message: 'Password reset token generated',
+      message: 'Demo password reset token generated; no email or SMS was sent',
       resetToken: rawToken,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    accountFailure(res, error);
   }
 };
 

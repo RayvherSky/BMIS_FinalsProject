@@ -162,7 +162,7 @@ test('NOTES-role a missing target returns 404 without saving', async t => {
   assert.equal(f.saves(), 0);
 });
 
-const reportBody = { title: 'Test report', description: 'Maintenance requested.', category: 'Infrastructure', location: 'Baclaran' };
+const reportBody = { title: 'Test report', description: 'Maintenance requested.', category: 'Infrastructure', location: 'Baclaran', contactNumber: '09171234567' };
 
 test('NOTES-priority residents cannot choose initial priority through report submission', async t => {
   const f = await fixture(t);
@@ -201,7 +201,7 @@ test('NOTES-priority resident updates and invalid admin values are rejected with
 });
 
 async function createReport(f, fields = {}) {
-  const created = await f.send('/api/tickets', { ...reportBody, ...fields }, 'resident-fixture', 'POST');
+  const created = await f.send('/api/tickets', { ...reportBody, contactNumber: '09171234567', ...fields }, 'resident-fixture', 'POST');
   assert.equal(created.status, 201);
   return created.body;
 }
@@ -330,4 +330,97 @@ test('LINK resolved or archived reports cannot be either side of a new duplicate
   }
   assert.equal((await f.send(`/api/tickets/${child._id}/link`, { linkedTicketId: master._id }, 'admin-fixture', 'PUT')).status, 200);
   assert.equal(String(f.reports.get(child._id).linkedTicket), master._id);
+});
+
+test('LINK Admin resolution reaches parents, siblings and descendants through cycles and is repeatable', async t => {
+  const f = await fixture(t);
+  const group = await Promise.all(Array.from({ length: 4 }, () => createReport(f)));
+  const unrelated = await createReport(f);
+  const [parent, selected, sibling, descendant] = group.map(row => f.reports.get(row._id));
+  selected.linkedTicket = parent._id;
+  sibling.linkedTicket = parent._id;
+  descendant.linkedTicket = sibling._id;
+  parent.linkedTicket = descendant._id;
+  const path = `/api/tickets/${selected._id}/status`;
+  assert.equal((await f.send(path, { status: 'Resolved' }, 'resident-fixture', 'PUT')).status, 403);
+  assert.equal((await f.send(path, { status: 'In Progress' }, 'admin-fixture', 'PUT')).status, 200);
+  assert.equal(parent.status, 'Pending');
+  const result = await f.send(path, { status: 'Resolved' }, 'admin-fixture', 'PUT');
+  assert.equal(result.status, 200);
+  for (const row of [parent, selected, sibling, descendant]) {
+    assert.equal(row.status, 'Resolved'); assert.equal(row.isArchived, true);
+    assert.equal(row.resolvedAt.toISOString(), result.body.resolvedAt);
+    assert.equal(row.archivedAt.toISOString(), result.body.archivedAt);
+    assert.equal(row.statusHistory.filter(event => event.to === 'Resolved').length, 1);
+    assert.equal(String(row.statusHistory.at(-1).changedBy), adminId);
+    assert.ok(row.linkedTicket);
+  }
+  assert.equal(f.reports.get(unrelated._id).status, 'Pending');
+  assert.equal((await f.send(path, { status: 'Resolved' }, 'admin-fixture', 'PUT')).status, 200);
+  for (const row of [parent, selected, sibling, descendant]) {
+    assert.equal(row.statusHistory.filter(event => event.to === 'Resolved').length, 1);
+    assert.equal(row.resolvedAt.toISOString(), result.body.resolvedAt);
+  }
+});
+
+test('LINK group resolution handles assigned reviews and preserves already resolved reports', async t => {
+  const f = await fixture(t);
+  const parent = f.reports.get((await createReport(f))._id);
+  const children = await Promise.all(Array.from({ length: 3 }, () => createReport(f)));
+  const [pending, unreviewed, earlier] = children.map(row => f.reports.get(row._id));
+  for (const row of [pending, unreviewed, earlier]) row.linkedTicket = parent._id;
+  for (const row of [pending, unreviewed]) { row.assignedTo = residentId; row.assignedAt = new Date(); }
+  pending.review = { status: 'pending', requestedBy: residentId, requestedAt: new Date(),
+    assignmentId: residentId, assignedAt: pending.assignedAt };
+  earlier.status = 'Resolved'; earlier.isArchived = true;
+  earlier.resolvedAt = earlier.archivedAt = new Date('2026-10-01T00:00:00Z');
+  const result = await f.send(`/api/tickets/${parent._id}/status`, { status: 'Resolved' }, 'admin-fixture', 'PUT');
+  assert.equal(result.status, 200);
+  assert.equal(pending.status, 'Resolved'); assert.equal(unreviewed.status, 'Resolved');
+  assert.equal(pending.review.status, 'reviewed');
+  assert.equal(pending.reviewHistory.at(-1).source, 'linked_resolution');
+  assert.equal(pending.review.reviewedAt.toISOString(), result.body.resolvedAt);
+  assert.equal(earlier.resolvedAt.toISOString(), '2026-10-01T00:00:00.000Z');
+  assert.equal(earlier.statusHistory.length, 0);
+});
+
+test('LINK a selected assigned report still requires review before resolving its group', async t => {
+  const f = await fixture(t);
+  const parent = f.reports.get((await createReport(f))._id);
+  const child = f.reports.get((await createReport(f))._id);
+  parent.assignedTo = residentId; parent.assignedAt = new Date();
+  child.linkedTicket = parent._id;
+  const result = await f.send(`/api/tickets/${parent._id}/status`, { status: 'Resolved' }, 'admin-fixture', 'PUT');
+  assert.equal(result.status, 409);
+  assert.equal(parent.status, 'Pending'); assert.equal(child.status, 'Pending');
+  assert.equal(parent.statusHistory.length, 0); assert.equal(child.statusHistory.length, 0);
+});
+
+test('LINK concurrent Admin resolutions of different group members finish without duplicate history', async t => {
+  const f = await fixture(t);
+  const parent = f.reports.get((await createReport(f))._id);
+  const child = f.reports.get((await createReport(f))._id);
+  f.accounts.get(residentId).role = 'admin';
+  child.linkedTicket = parent._id;
+  const results = await Promise.all([
+    f.send(`/api/tickets/${parent._id}/status`, { status: 'Resolved' }, 'admin-fixture', 'PUT'),
+    f.send(`/api/tickets/${child._id}/status`, { status: 'Resolved' }, 'resident-fixture', 'PUT'),
+  ]);
+  assert.deepEqual(results.map(result => result.status), [200, 200]);
+  for (const row of [parent, child]) {
+    assert.equal(row.status, 'Resolved'); assert.equal(row.isArchived, true);
+    assert.equal(row.statusHistory.length, 1);
+  }
+});
+
+test('LINK resolution tolerates missing link targets and resolves dismissed linked tickets', async t => {
+  const f = await fixture(t);
+  const parent = f.reports.get((await createReport(f))._id);
+  const child = f.reports.get((await createReport(f))._id);
+  parent.linkedTicket = '507f1f77bcf86cd799439099';
+  child.linkedTicket = parent._id; child.status = 'Dismissed'; child.dismissedAt = new Date();
+  const result = await f.send(`/api/tickets/${parent._id}/status`, { status: 'Resolved' }, 'admin-fixture', 'PUT');
+  assert.equal(result.status, 200);
+  assert.equal(child.status, 'Resolved'); assert.equal(child.dismissedAt, null);
+  assert.equal(child.statusHistory.at(-1).from, 'Dismissed');
 });

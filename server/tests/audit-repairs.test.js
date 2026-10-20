@@ -18,7 +18,7 @@ function response() {
 
 const reportBody = {
   title: 'Animal welfare concern', description: 'Assistance requested near the market.',
-  category: 'Others', location: 'Baclaran',
+  category: 'Others', location: 'Baclaran', contactNumber: '09171234567',
 };
 const residentId = '507f1f77bcf86cd799439011';
 
@@ -57,16 +57,18 @@ test('AUD-06 registration rejects invalid supplied phones before any account loo
   assert.equal(create.mock.callCount(), 0);
 });
 
-test('AUD-06 registration accepts optional blanks and the supported mobile formats', async t => {
+test('AUD-06 registration rejects blanks and accepts normalized supported mobile formats', async t => {
   t.mock.method(jwt, 'sign', () => 'unit-test-token');
   t.mock.method(User.Query.prototype, 'exec', async () => null);
   t.mock.method(User, 'create', async data => new User(data));
   for (const phone of validPhones) {
     const res = response();
     await register({ body: { firstName: 'Test', lastName: 'Phone', email: 'phone@example.com', password: 'Password123!', phone } }, res);
-    assert.equal(res.statusCode, 201, `phone=${JSON.stringify(phone)}`);
-    assert.equal(res.body.user.phone, phone || '');
-    assert.equal(res.body.user.role, 'user');
+    assert.equal(res.statusCode, phone?.trim() ? 201 : 400, `phone=${JSON.stringify(phone)}`);
+    if (phone?.trim()) {
+      assert.equal(res.body.user.phone, '09171234567');
+      assert.equal(res.body.user.role, 'user');
+    }
   }
 });
 
@@ -85,7 +87,7 @@ for (const [name, handler] of [['profile', updateProfile], ['admin user', update
     assert.equal(save.mock.callCount(), 0);
   });
 
-  test(`AUD-06 ${name} accepts valid phones and supports clearing or omitting the field`, async t => {
+  test(`AUD-06 ${name} accepts valid phones and omission while refusing to clear a valid contact`, async t => {
     const account = new User({ _id: residentId, firstName: 'Test', lastName: 'Phone', email: 'phone@example.com', password: 'Password123!', phone: '09171234567' });
     t.mock.method(User.Query.prototype, 'exec', async () => account);
     t.mock.method(account, 'save', async () => account);
@@ -93,8 +95,8 @@ for (const [name, handler] of [['profile', updateProfile], ['admin user', update
       const before = account.phone;
       const res = response();
       await handler({ user: { id: residentId }, params: { id: residentId }, body: { phone } }, res);
-      assert.equal(res.statusCode, 200);
-      assert.equal(account.phone, phone === undefined ? before : phone);
+      assert.equal(res.statusCode, phone !== undefined && !phone.trim() ? 400 : 200);
+      assert.equal(account.phone, before);
     }
   });
 
@@ -154,7 +156,7 @@ const directories = [
   ['tickets', getAllTickets, Ticket, ['title', 'description'], { isArchived: false }],
   ['my-tickets', getMyTickets, Ticket, ['title', 'description'], { isArchived: false, submittedBy: 'resident-id' }],
   ['archive', getArchivedTickets, Ticket, ['title', 'description'], { isArchived: true }],
-  ['users', getAllUsers, User, ['firstName', 'lastName', 'email'], {}],
+  ['users', getAllUsers, User, ['firstName', 'lastName', 'email', 'phone'], {}],
 ];
 
 for (const [name, handler, Model, fields, baseFilter] of directories) {

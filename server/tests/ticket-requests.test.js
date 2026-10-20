@@ -43,7 +43,14 @@ async function send(path, role = 'admin', body, method = body === undefined ? 'G
 }
 const pathOf = t => `/tickets/${t._id}`;
 async function report(fields = {}) { return Ticket.create({ title: 'Drainage report', description: 'Inspect drainage', category: 'Infrastructure', location: 'Baclaran', submittedBy: accounts.user._id, ...fields }); }
-const status = (t, next) => send(`${pathOf(t)}/status`, 'admin', { status: next }, 'PUT');
+const status = async (t, next) => {
+  const current = await Ticket.findById(t._id);
+  if (next === 'Resolved' && current?.assignedTo && current.status !== 'Resolved') {
+    const who = Object.keys(accounts).find(name => String(accounts[name]._id) === String(current.assignedTo));
+    assert.equal((await send(`${pathOf(t)}/review`, who, {})).status, 201);
+  }
+  return send(`${pathOf(t)}/status`, 'admin', { status: next }, 'PUT');
+};
 const assign = (t, who = 'employee') => send(`${pathOf(t)}/assign`, 'admin', { assignedTo: who ? String(accounts[who]._id) : null }, 'PATCH');
 const request = (t, type, message = '', who = 'user') => send(`${pathOf(t)}/requests`, who, { type, message });
 const handle = (t, id, body, who = 'admin') => send(`${pathOf(t)}/requests/${id}`, who, body, 'PATCH');
